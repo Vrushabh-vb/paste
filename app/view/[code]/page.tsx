@@ -1,10 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
+import { Copy, Check, ArrowLeft, Clock } from "lucide-react"
 import Link from "next/link"
+import { Header } from "@/components/header"
+import { Footer } from "@/components/footer"
+import { toast } from "sonner"
 import { motion } from "framer-motion"
-import { Copy, Check, ArrowLeft, FileText } from "lucide-react"
-import { AnimatedCard } from "@/components/animated-card"
 
 interface PasteData {
   content: string
@@ -13,6 +18,7 @@ interface PasteData {
 
 export default function ViewPastePage({ params }: { params: { code: string } | Promise<{ code: string }> }) {
   const [code, setCode] = useState<string>("");
+  
   const [pasteData, setPasteData] = useState<PasteData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +66,7 @@ export default function ViewPastePage({ params }: { params: { code: string } | P
     try {
       await navigator.clipboard.writeText(pasteData.content)
       setCopied(true)
+      toast.success("Copied to clipboard!")
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       // Fallback for older browsers
@@ -70,129 +77,81 @@ export default function ViewPastePage({ params }: { params: { code: string } | P
       document.execCommand("copy")
       document.body.removeChild(textArea)
       setCopied(true)
+      toast.success("Copied to clipboard!")
       setTimeout(() => setCopied(false), 2000)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6">
-      <div className="max-w-2xl mx-auto">
-        <div className="mb-4">
-          <Link href="/">
-            <motion.button
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-              whileHover={{ x: -3 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </motion.button>
-          </Link>
-        </div>
+    <div className="flex min-h-screen flex-col">
+      <Header />
+      <main className="flex-1 flex flex-col items-center justify-center">
+        <div className="w-full max-w-screen-md px-4 py-8">
+          <div className="mb-4">
+            <Link href="/">
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Home
+              </Button>
+            </Link>
+          </div>
 
-        <AnimatedCard>
-          {loading ? (
-            <div className="p-8 flex flex-col items-center justify-center">
-              <motion.div 
-                className="w-10 h-10 border-3 border-t-gradient-start border-gray-200 dark:border-gray-700 rounded-full"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              />
-              <motion.p 
-                className="mt-4 text-gray-600 dark:text-gray-400"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-              >
-                Loading paste...
-              </motion.p>
-            </div>
-          ) : (
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <motion.div 
-                  className="flex items-center"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="bg-gradient-to-r from-gradient-start to-gradient-end p-2 rounded-md mr-3">
-                    <FileText className="w-4 h-4 text-white" />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Card className="border shadow-sm w-full">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center justify-between">
+                  <span className="flex items-center">
+                    Code: <span className="font-mono ml-1">{code}</span>
+                  </span>
+                  {pasteData && (
+                    <Button onClick={copyToClipboard} variant="outline" size="sm" className="flex items-center gap-2 h-8">
+                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? "Copied!" : "Copy"}
+                    </Button>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                    <p className="mt-4 text-muted-foreground">Loading paste...</p>
                   </div>
-                  <h2 className="text-lg font-medium">
-                    Paste Code: <span className="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{code}</span>
-                  </h2>
-                </motion.div>
-                
-                {pasteData && (
-                  <motion.button
-                    onClick={copyToClipboard}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: 0.1 }}
-                  >
-                    {copied ? (
-                      <Check className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                    {copied ? "Copied!" : "Copy"}
-                  </motion.button>
-                )}
-              </div>
-              
-              {error ? (
-                <motion.div 
-                  className="text-center py-8"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="bg-red-50 dark:bg-red-900/10 p-6 rounded-md border border-red-100 dark:border-red-900/20">
-                    <p className="text-red-600 dark:text-red-400 text-lg font-medium mb-2">{error}</p>
-                    <p className="text-gray-600 dark:text-gray-400">The paste may have expired or the code is invalid.</p>
+                ) : error ? (
+                  <div className="text-center py-8">
+                    <p className="text-destructive text-lg">{error}</p>
+                    <p className="text-muted-foreground mt-2">The paste may have expired or the code is invalid.</p>
                   </div>
-                </motion.div>
-              ) : pasteData ? (
-                <motion.div 
-                  className="space-y-4"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.2 }}
-                >
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Content:</label>
-                    <div className="relative">
-                      <textarea
-                        value={pasteData.content}
-                        readOnly
-                        className="w-full min-h-[250px] resize-y bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md py-3 px-4 font-mono text-sm"
+                ) : pasteData ? (
+                  <div className="space-y-3">
+                    <div>
+                      <Textarea 
+                        value={pasteData.content} 
+                        readOnly 
+                        className="min-h-[250px] resize-y bg-muted/50 font-mono text-sm"
                       />
-                      <div className="absolute top-2 right-2 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs text-gray-500 dark:text-gray-400">
-                        {pasteData.content.length} characters
-                      </div>
                     </div>
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center">
-                    <motion.div 
-                      className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2"
-                      animate={{ 
-                        scale: [1, 1.1, 1],
-                        opacity: [1, 0.7, 1]
-                      }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    />
+                ) : null}
+              </CardContent>
+              {pasteData && !loading && !error && (
+                <CardFooter className="border-t pt-3 flex justify-between items-center text-xs text-muted-foreground">
+                  <div className="flex items-center">
+                    <Clock className="mr-1.5 h-3.5 w-3.5" />
                     Created: {new Date(pasteData.createdAt).toLocaleString()}
                   </div>
-                </motion.div>
-              ) : null}
-            </div>
-          )}
-        </AnimatedCard>
-      </div>
+                  <div>Expires after 30 minutes</div>
+                </CardFooter>
+              )}
+            </Card>
+          </motion.div>
+        </div>
+      </main>
+      <Footer />
     </div>
   )
 }

@@ -9,10 +9,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  experimental: {
-    skipTrailingSlashRedirect: true,
-    serverComponentsExternalPackages: [],
-  },
 }
 
 export default nextConfig

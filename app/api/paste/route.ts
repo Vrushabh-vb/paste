@@ -9,27 +9,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Content is required" }, { status: 400 })
     }
 
-    try {
-      // Clean expired pastes
-      await cleanExpiredPastes()
+    // Clean expired pastes before creating new one
+    cleanExpiredPastes()
 
-      // Generate a unique code
-      const code = await generateCode()
-      const createdAt = Date.now()
+    const code = generateCode()
+    const createdAt = Date.now()
 
-      // Store the paste
-      await pasteStore.set(code, {
-        content: content.trim(),
-        createdAt,
-      })
+    pasteStore.set(code, {
+      content: content.trim(),
+      createdAt,
+    })
 
-      return NextResponse.json({ code })
-    } catch (storageError) {
-      console.error("Storage error:", storageError);
-      return NextResponse.json({ error: "Failed to store paste. Please try again." }, { status: 500 })
-    }
-  } catch (parseError) {
-    console.error("Request parsing error:", parseError);
-    return NextResponse.json({ error: "Invalid request format" }, { status: 400 })
+    return NextResponse.json({ code })
+  } catch (error) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 })
   }
 }
