@@ -20,18 +20,23 @@ export async function GET(
   const paste = pasteStore.get(code)
 
   if (!paste) {
-    return NextResponse.json({ error: "Paste not found or expired" }, { status: 404 })
+    return NextResponse.json({ error: "Content not found or expired" }, { status: 404 })
   }
 
   // Double-check if paste is expired (in case cleanup didn't catch it)
   const now = Date.now()
   if (now - paste.createdAt > TTL_MS) {
     pasteStore.delete(code)
-    return NextResponse.json({ error: "Paste not found or expired" }, { status: 404 })
+    return NextResponse.json({ error: "Content not found or expired" }, { status: 404 })
   }
 
   return NextResponse.json({
     content: paste.content,
     createdAt: new Date(paste.createdAt).toISOString(),
+    fileName: paste.fileName,
+    fileType: paste.fileType,
+    isFile: paste.isFile || false,
+    files: paste.files || [],
+    isMultiFile: paste.isMultiFile || false
   })
 }
