@@ -1,7 +1,6 @@
 /**
- * V0 Project Fixer
  * 
- * This script fixes common issues with v0.dev projects:
+ * This script fixes common issues with projects:
  * 1. Dependency conflicts (date-fns and react-day-picker)
  * 2. Node.js version detection issues
  * 3. React hydration errors
@@ -11,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-console.log('V0 Project Fixer');
+console.log('Project Fixer');
 console.log('---------------');
 console.log(`Current Node.js: ${process.version} at ${process.execPath}`);
 console.log(`Working directory: ${process.cwd()}`);
@@ -159,15 +158,15 @@ echo Starting Next.js with Node.js ${process.version}...
 npm run dev
 pause
 `;
-fs.writeFileSync('start-v0-project.bat', batchContent);
-console.log('✅ Created start-v0-project.bat launcher file');
+fs.writeFileSync('start-fix-project.bat', batchContent);
+console.log('✅ Created start-fix-project.bat launcher file');
 
 // Final instructions
 console.log('\n✨ V0 project fixes completed successfully! ✨');
 console.log('\nTo run your project:');
-console.log('1. Double-click start-v0-project.bat');
+console.log('1. Double-click start-fix-project.bat');
 console.log('   OR');
 console.log('2. Run: npm run dev');
-console.log('\nTo fix other v0 projects:');
-console.log('1. Copy this script to new v0 project folders');
-console.log('2. Run: node v0-project-fixer.js'); 
+console.log('\nTo fix other fix projects:');
+console.log('1. Copy this script to new fix project folders');
+console.log('2. Run: node fix-project-fixer.js'); 
