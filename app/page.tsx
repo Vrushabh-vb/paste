@@ -188,6 +188,16 @@ export default function HomePage() {
     setSelectedFile(null)
   }
 
+  const handleLargeFileUploaded = (code: string, expiresAt: number, fileName: string) => {
+    // Large file was uploaded and processed - set the result directly
+    setGeneratedCode(code)
+    setGeneratedExpiresAt(expiresAt)
+    setContent("")
+    setSelectedFile(null)
+    setSelectedFiles([])
+    toast.success(`Large file "${fileName}" shared successfully!`)
+  }
+
   const clearFile = () => {
     setSelectedFile(null)
   }
@@ -307,6 +317,8 @@ export default function HomePage() {
                             selectedFile={selectedFile}
                             selectedFiles={selectedFiles}
                             multiple={allowMultiple}
+                            onLargeFileUploaded={handleLargeFileUploaded}
+                            expirationOption={expirationOption}
                           />
                         </TabsContent>
                       </Tabs>

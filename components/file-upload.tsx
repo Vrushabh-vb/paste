@@ -25,6 +25,8 @@ interface FileUploadProps {
   selectedFile: FileData | null;
   selectedFiles: FileData[];
   multiple?: boolean;
+  onLargeFileUploaded?: (code: string, expiresAt: number, fileName: string) => void;
+  expirationOption?: string;
 }
 
 export function FileUpload({ 
@@ -34,7 +36,9 @@ export function FileUpload({
   onClearFiles,
   selectedFile, 
   selectedFiles,
-  multiple = false 
+  multiple = false,
+  onLargeFileUploaded,
+  expirationOption = '30min'
 }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -73,7 +77,7 @@ export function FileUpload({
     })
   }
 
-  const uploadLargeFile = async (file: File): Promise<FileData> => {
+  const uploadLargeFile = async (file: File, expirationOption: string = '30min'): Promise<void> => {
     setUploadingFileName(file.name)
     setUploadProgress(0)
 
@@ -121,11 +125,14 @@ export function FileUpload({
         setUploadProgress(progress)
       }
 
-      // Step 4: Complete upload
+      // Step 4: Complete upload and create paste
       const completeResponse = await fetch('/api/upload/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uploadId })
+        body: JSON.stringify({ 
+          uploadId,
+          expirationOption
+        })
       })
 
       if (!completeResponse.ok) {
@@ -133,13 +140,11 @@ export function FileUpload({
         throw new Error(error.error || 'Failed to complete upload')
       }
 
-      // Return file data in expected format
-      const fullBase64 = `data:${file.type};base64,${chunks.join('')}`
-      return {
-        name: file.name,
-        type: file.type,
-        base64: fullBase64,
-        size: file.size
+      const { code, expiresAt } = await completeResponse.json()
+      
+      // Notify parent component that upload is complete
+      if (onLargeFileUploaded) {
+        onLargeFileUploaded(code, expiresAt, file.name)
       }
     } finally {
       setUploadProgress(0)
@@ -158,24 +163,22 @@ export function FileUpload({
 
     setIsProcessing(true)
     try {
-      let fileData: FileData
-
       // Use chunked upload for files larger than chunk size
       if (file.size > CHUNK_SIZE) {
-        fileData = await uploadLargeFile(file)
+        await uploadLargeFile(file, expirationOption)
         toast.success(`Large file "${file.name}" uploaded successfully!`)
+        // Large file upload is complete - parent will be notified via callback
       } else {
         // Use regular upload for smaller files
         const base64 = await convertToBase64(file)
-        fileData = {
+        const fileData: FileData = {
           base64,
           name: file.name,
           type: file.type,
           size: file.size
         }
+        onFileSelect(fileData)
       }
-
-      onFileSelect(fileData)
     } catch (error) {
       console.error("File processing error:", error)
       toast.error(error instanceof Error ? error.message : "Failed to process file")
@@ -216,24 +219,23 @@ export function FileUpload({
         }
         
         try {
-          let fileData: FileData
-
           // Use chunked upload for large files
           if (file.size > CHUNK_SIZE) {
-            fileData = await uploadLargeFile(file)
+            await uploadLargeFile(file, expirationOption)
             toast.success(`Large file "${file.name}" uploaded successfully!`)
+            // Large file upload is complete - parent will be notified via callback
+            // Don't add to newFiles array as it's already processed
           } else {
             // Use regular upload for smaller files
             const base64 = await convertToBase64(file)
-            fileData = {
+            const fileData: FileData = {
               base64,
               name: file.name,
               type: file.type,
               size: file.size
             }
+            newFiles.push(fileData)
           }
-
-          newFiles.push(fileData)
           totalExistingSize += file.size
         } catch (error) {
           console.error("File processing error:", error)
