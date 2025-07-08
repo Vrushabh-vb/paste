@@ -1,21 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { pasteStore, cleanExpiredPastes, generateCode, MAX_FILE_SIZE, MAX_TOTAL_FILES_SIZE, MAX_FILES, DEFAULT_TTL_MS, EXPIRATION_OPTIONS } from "@/lib/store"
+import { pasteStore, cleanExpiredPastes, generateCode, MAX_FILE_SIZE, MAX_TOTAL_FILES_SIZE, MAX_FILES } from "@/lib/store"
 
 export async function POST(request: NextRequest) {
   try {
-    const { 
-      content, 
-      fileName, 
-      fileType, 
-      isFile, 
-      files, 
-      isMultiFile, 
-      expirationOption = '30min',
-      allowEditing = false 
-    } = await request.json()
-
-    // Validate expiration option
-    const expirationMs = EXPIRATION_OPTIONS[expirationOption as keyof typeof EXPIRATION_OPTIONS] || DEFAULT_TTL_MS
+    const { content, fileName, fileType, isFile, files, isMultiFile } = await request.json()
 
     // For text content
     if (!isFile && !isMultiFile) {
@@ -35,7 +23,7 @@ export async function POST(request: NextRequest) {
       const base64Content = content.split(';base64,')[1]
       const fileSize = (base64Content.length * 3) / 4
       if (fileSize > MAX_FILE_SIZE) {
-        return NextResponse.json({ error: `File size exceeds ${Math.floor(MAX_FILE_SIZE / (1024 * 1024))}MB limit` }, { status: 400 })
+        return NextResponse.json({ error: "File size exceeds 5MB limit" }, { status: 400 })
       }
 
       // Validate file name and type
@@ -72,13 +60,13 @@ export async function POST(request: NextRequest) {
         totalSize += fileSize
 
         if (fileSize > MAX_FILE_SIZE) {
-          return NextResponse.json({ error: `File "${file.name}" exceeds ${Math.floor(MAX_FILE_SIZE / (1024 * 1024))}MB limit` }, { status: 400 })
+          return NextResponse.json({ error: `File "${file.name}" exceeds 5MB limit` }, { status: 400 })
         }
       }
 
       // Check total size
       if (totalSize > MAX_TOTAL_FILES_SIZE) {
-        return NextResponse.json({ error: `Total file size exceeds ${Math.floor(MAX_TOTAL_FILES_SIZE / (1024 * 1024))}MB limit` }, { status: 400 })
+        return NextResponse.json({ error: `Total file size exceeds 20MB limit` }, { status: 400 })
       }
     }
 
@@ -87,79 +75,33 @@ export async function POST(request: NextRequest) {
 
     const code = generateCode()
     const createdAt = Date.now()
-    const expiresAt = createdAt + expirationMs
 
     // Store based on type
     if (isMultiFile) {
       pasteStore.set(code, {
         content: "", // Empty for multi-file
         createdAt,
-        expiresAt,
         files,
-        isMultiFile: true,
-        allowEditing,
-        downloadCount: 0
+        isMultiFile: true
       })
     } else if (isFile) {
       pasteStore.set(code, {
         content: content.trim(),
         createdAt,
-        expiresAt,
         fileName,
         fileType,
-        isFile: true,
-        allowEditing,
-        downloadCount: 0
+        isFile: true
       })
     } else {
       pasteStore.set(code, {
         content: content.trim(),
-        createdAt,
-        expiresAt,
-        allowEditing,
-        downloadCount: 0
+        createdAt
       })
     }
 
-    return NextResponse.json({ code, expiresAt })
+    return NextResponse.json({ code })
   } catch (error) {
     console.error("Error processing paste:", error)
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 })
-  }
-}
-
-export async function PUT(request: NextRequest) {
-  try {
-    const { code, content } = await request.json()
-
-    if (!code || !content) {
-      return NextResponse.json({ error: "Code and content are required" }, { status: 400 })
-    }
-
-    // Clean expired pastes first
-    cleanExpiredPastes()
-
-    const paste = pasteStore.get(code)
-    if (!paste) {
-      return NextResponse.json({ error: "Paste not found or expired" }, { status: 404 })
-    }
-
-    if (!paste.allowEditing) {
-      return NextResponse.json({ error: "Editing is not allowed for this paste" }, { status: 403 })
-    }
-
-    // Only allow editing text content, not files
-    if (paste.isFile || paste.isMultiFile) {
-      return NextResponse.json({ error: "Files cannot be edited" }, { status: 400 })
-    }
-
-    // Update the content
-    paste.content = content.trim()
-    pasteStore.set(code, paste)
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Error updating paste:", error)
     return NextResponse.json({ error: "Invalid request" }, { status: 400 })
   }
 }
