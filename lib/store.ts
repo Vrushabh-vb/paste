@@ -3,6 +3,7 @@ declare global {
   var pasteStoreGlobal: Map<string, { 
     content: string; 
     createdAt: number;
+    expiresAt: number;
     fileName?: string;
     fileType?: string;
     isFile?: boolean;
@@ -12,6 +13,8 @@ declare global {
       content: string;
     }>;
     isMultiFile?: boolean;
+    allowEditing?: boolean;
+    downloadCount?: number;
   }> | undefined;
 }
 
@@ -19,6 +22,7 @@ declare global {
 const pasteStore = global.pasteStoreGlobal || new Map<string, { 
   content: string; 
   createdAt: number;
+  expiresAt: number;
   fileName?: string;
   fileType?: string;
   isFile?: boolean;
@@ -28,23 +32,38 @@ const pasteStore = global.pasteStoreGlobal || new Map<string, {
     content: string;
   }>;
   isMultiFile?: boolean;
+  allowEditing?: boolean;
+  downloadCount?: number;
 }>();
 
 if (process.env.NODE_ENV !== 'production') {
   global.pasteStoreGlobal = pasteStore;
 }
 
-// TTL in milliseconds (default 30 minutes)
-export const TTL_MS = Number.parseInt(process.env.PASTE_TTL_SECONDS || "1800") * 1000
+// Expiration options in milliseconds
+export const EXPIRATION_OPTIONS = {
+  '5min': 5 * 60 * 1000,
+  '30min': 30 * 60 * 1000,
+  '1hour': 60 * 60 * 1000,
+  '6hours': 6 * 60 * 60 * 1000,
+  '12hours': 12 * 60 * 60 * 1000,
+  '1day': 24 * 60 * 60 * 1000,
+  '3days': 3 * 24 * 60 * 60 * 1000,
+  '7days': 7 * 24 * 60 * 60 * 1000,
+  '30days': 30 * 24 * 60 * 60 * 1000
+}
 
-// Maximum file size in bytes (5MB)
-export const MAX_FILE_SIZE = 5 * 1024 * 1024
+// Default TTL in milliseconds (30 minutes)
+export const DEFAULT_TTL_MS = EXPIRATION_OPTIONS['30min']
 
-// Maximum total files size in bytes (20MB)
-export const MAX_TOTAL_FILES_SIZE = 20 * 1024 * 1024
+// Maximum file size in bytes (100MB)
+export const MAX_FILE_SIZE = 100 * 1024 * 1024
+
+// Maximum total files size in bytes (500MB)
+export const MAX_TOTAL_FILES_SIZE = 500 * 1024 * 1024
 
 // Maximum number of files
-export const MAX_FILES = 5
+export const MAX_FILES = 20
 
 export function generateCode(): string {
   let code: string
@@ -57,9 +76,23 @@ export function generateCode(): string {
 export function cleanExpiredPastes() {
   const now = Date.now()
   for (const [code, paste] of pasteStore.entries()) {
-    if (now - paste.createdAt > TTL_MS) {
+    if (now > paste.expiresAt) {
       pasteStore.delete(code)
     }
+  }
+}
+
+export function formatExpirationTime(ms: number): string {
+  const minutes = Math.floor(ms / (1000 * 60))
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  
+  if (days > 0) {
+    return `${days} day${days > 1 ? 's' : ''}`
+  } else if (hours > 0) {
+    return `${hours} hour${hours > 1 ? 's' : ''}`
+  } else {
+    return `${minutes} minute${minutes > 1 ? 's' : ''}`
   }
 }
 

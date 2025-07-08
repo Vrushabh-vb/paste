@@ -44,7 +44,7 @@ export function FileUpload({
 
     // Check file size
     if (file.size > MAX_FILE_SIZE) {
-      toast.error(`File size exceeds 5MB limit (${(MAX_FILE_SIZE / (1024 * 1024)).toFixed(0)}MB)`)
+      toast.error(`File size exceeds ${(MAX_FILE_SIZE / (1024 * 1024)).toFixed(0)}MB limit`)
       return
     }
 
@@ -86,13 +86,13 @@ export function FileUpload({
         
         // Check individual file size
         if (file.size > MAX_FILE_SIZE) {
-          toast.error(`File "${file.name}" exceeds 5MB limit`)
+          toast.error(`File "${file.name}" exceeds ${(MAX_FILE_SIZE / (1024 * 1024)).toFixed(0)}MB limit`)
           continue
         }
         
         // Check if adding this file would exceed the total limit
         if (totalExistingSize + file.size > MAX_TOTAL_FILES_SIZE) {
-          toast.error(`Total file size would exceed 20MB limit`)
+          toast.error(`Total file size would exceed ${(MAX_TOTAL_FILES_SIZE / (1024 * 1024)).toFixed(0)}MB limit`)
           break
         }
         
@@ -212,7 +212,7 @@ export function FileUpload({
             <>
               <FileUp className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
               <p className="text-sm font-medium mb-1">Drag and drop a file here or click to browse</p>
-              <p className="text-xs text-muted-foreground">Maximum file size: 5MB</p>
+              <p className="text-xs text-muted-foreground">Maximum file size: 100MB</p>
             </>
           )}
           <Input 
@@ -275,7 +275,7 @@ export function FileUpload({
               <FileUp className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
               <p className="text-sm font-medium">Drag and drop files or click to browse</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Maximum {MAX_FILES} files, 5MB each (20MB total)
+                Maximum {MAX_FILES} files, {(MAX_FILE_SIZE / (1024 * 1024)).toFixed(0)}MB each ({(MAX_TOTAL_FILES_SIZE / (1024 * 1024)).toFixed(0)}MB total)
               </p>
             </>
           )}
