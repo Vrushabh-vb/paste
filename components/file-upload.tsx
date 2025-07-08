@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { FileUp, X, File, Plus, Trash2 } from "lucide-react"
-import { MAX_FILE_SIZE, MAX_FILES, MAX_TOTAL_FILES_SIZE } from "@/lib/store"
+import { MAX_FILE_SIZE, MAX_FILES, MAX_TOTAL_FILES_SIZE, CHUNK_SIZE } from "@/lib/store"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Progress } from "@/components/ui/progress"
 
 interface FileData {
   name: string;
@@ -37,7 +38,114 @@ export function FileUpload({
 }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadingFileName, setUploadingFileName] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const chunkFile = (file: File): Promise<string[]> => {
+    return new Promise((resolve, reject) => {
+      const chunks: string[] = []
+      const reader = new FileReader()
+      let offset = 0
+
+      const readNextChunk = () => {
+        const chunk = file.slice(offset, offset + CHUNK_SIZE)
+        reader.readAsDataURL(chunk)
+      }
+
+      reader.onload = () => {
+        if (reader.result) {
+          // Extract base64 part without the data URL prefix
+          const base64 = (reader.result as string).split(',')[1]
+          chunks.push(base64)
+          offset += CHUNK_SIZE
+
+          if (offset < file.size) {
+            readNextChunk()
+          } else {
+            resolve(chunks)
+          }
+        }
+      }
+
+      reader.onerror = () => reject(new Error("Failed to read file chunk"))
+      readNextChunk()
+    })
+  }
+
+  const uploadLargeFile = async (file: File): Promise<FileData> => {
+    setUploadingFileName(file.name)
+    setUploadProgress(0)
+
+    try {
+      // Step 1: Initialize chunked upload
+      const startResponse = await fetch('/api/upload/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          totalChunks: Math.ceil(file.size / CHUNK_SIZE)
+        })
+      })
+
+      if (!startResponse.ok) {
+        const error = await startResponse.json()
+        throw new Error(error.error || 'Failed to initialize upload')
+      }
+
+      const { uploadId } = await startResponse.json()
+
+      // Step 2: Split file into chunks
+      const chunks = await chunkFile(file)
+
+      // Step 3: Upload chunks
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkResponse = await fetch('/api/upload/chunk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uploadId,
+            chunkIndex: i,
+            chunkData: chunks[i]
+          })
+        })
+
+        if (!chunkResponse.ok) {
+          const error = await chunkResponse.json()
+          throw new Error(error.error || `Failed to upload chunk ${i + 1}`)
+        }
+
+        const { progress } = await chunkResponse.json()
+        setUploadProgress(progress)
+      }
+
+      // Step 4: Complete upload
+      const completeResponse = await fetch('/api/upload/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadId })
+      })
+
+      if (!completeResponse.ok) {
+        const error = await completeResponse.json()
+        throw new Error(error.error || 'Failed to complete upload')
+      }
+
+      // Return file data in expected format
+      const fullBase64 = `data:${file.type};base64,${chunks.join('')}`
+      return {
+        name: file.name,
+        type: file.type,
+        base64: fullBase64,
+        size: file.size
+      }
+    } finally {
+      setUploadProgress(0)
+      setUploadingFileName("")
+    }
+  }
 
   const handleFileChange = async (file: File | null) => {
     if (!file) return
@@ -50,16 +158,27 @@ export function FileUpload({
 
     setIsProcessing(true)
     try {
-      const base64 = await convertToBase64(file)
-      onFileSelect({
-        base64,
-        name: file.name,
-        type: file.type,
-        size: file.size
-      })
+      let fileData: FileData
+
+      // Use chunked upload for files larger than chunk size
+      if (file.size > CHUNK_SIZE) {
+        fileData = await uploadLargeFile(file)
+        toast.success(`Large file "${file.name}" uploaded successfully!`)
+      } else {
+        // Use regular upload for smaller files
+        const base64 = await convertToBase64(file)
+        fileData = {
+          base64,
+          name: file.name,
+          type: file.type,
+          size: file.size
+        }
+      }
+
+      onFileSelect(fileData)
     } catch (error) {
-      toast.error("Failed to process file")
       console.error("File processing error:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to process file")
     } finally {
       setIsProcessing(false)
     }
@@ -97,17 +216,28 @@ export function FileUpload({
         }
         
         try {
-          const base64 = await convertToBase64(file)
-          newFiles.push({
-            base64,
-            name: file.name,
-            type: file.type,
-            size: file.size
-          })
+          let fileData: FileData
+
+          // Use chunked upload for large files
+          if (file.size > CHUNK_SIZE) {
+            fileData = await uploadLargeFile(file)
+            toast.success(`Large file "${file.name}" uploaded successfully!`)
+          } else {
+            // Use regular upload for smaller files
+            const base64 = await convertToBase64(file)
+            fileData = {
+              base64,
+              name: file.name,
+              type: file.type,
+              size: file.size
+            }
+          }
+
+          newFiles.push(fileData)
           totalExistingSize += file.size
         } catch (error) {
-          toast.error(`Failed to process file "${file.name}"`)
           console.error("File processing error:", error)
+          toast.error(`Failed to process file "${file.name}"`)
         }
       }
       
@@ -206,6 +336,13 @@ export function FileUpload({
           {isProcessing ? (
             <div className="flex flex-col items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mb-2"></div>
+              {uploadingFileName && (
+                <div className="w-full max-w-xs mx-auto mb-2">
+                  <p className="text-sm mb-1 truncate">Uploading: {uploadingFileName}</p>
+                  <Progress value={uploadProgress} className="h-2" />
+                  <p className="text-xs text-muted-foreground mt-1">{uploadProgress}%</p>
+                </div>
+              )}
               <p className="text-sm">Processing...</p>
             </div>
           ) : (
@@ -268,6 +405,13 @@ export function FileUpload({
           {isProcessing ? (
             <div className="flex flex-col items-center justify-center py-2">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent mb-2"></div>
+              {uploadingFileName && (
+                <div className="w-full max-w-sm mx-auto mb-2">
+                  <p className="text-sm mb-1 truncate">Uploading: {uploadingFileName}</p>
+                  <Progress value={uploadProgress} className="h-2" />
+                  <p className="text-xs text-muted-foreground mt-1">{uploadProgress}%</p>
+                </div>
+              )}
               <p className="text-sm">Processing files...</p>
             </div>
           ) : (

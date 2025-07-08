@@ -15,6 +15,19 @@ declare global {
     isMultiFile?: boolean;
     allowEditing?: boolean;
     downloadCount?: number;
+    chunks?: Map<number, string>;
+    totalChunks?: number;
+    uploadProgress?: number;
+  }> | undefined;
+
+  var chunkedUploadsGlobal: Map<string, {
+    chunks: Map<number, string>;
+    totalChunks: number;
+    fileName: string;
+    fileType: string;
+    totalSize: number;
+    uploadedChunks: number;
+    expiresAt: number;
   }> | undefined;
 }
 
@@ -34,10 +47,24 @@ const pasteStore = global.pasteStoreGlobal || new Map<string, {
   isMultiFile?: boolean;
   allowEditing?: boolean;
   downloadCount?: number;
+  chunks?: Map<number, string>;
+  totalChunks?: number;
+  uploadProgress?: number;
+}>();
+
+const chunkedUploads = global.chunkedUploadsGlobal || new Map<string, {
+  chunks: Map<number, string>;
+  totalChunks: number;
+  fileName: string;
+  fileType: string;
+  totalSize: number;
+  uploadedChunks: number;
+  expiresAt: number;
 }>();
 
 if (process.env.NODE_ENV !== 'production') {
   global.pasteStoreGlobal = pasteStore;
+  global.chunkedUploadsGlobal = chunkedUploads;
 }
 
 // Expiration options in milliseconds
@@ -56,7 +83,7 @@ export const EXPIRATION_OPTIONS = {
 // Default TTL in milliseconds (30 minutes)
 export const DEFAULT_TTL_MS = EXPIRATION_OPTIONS['30min']
 
-// Maximum file size in bytes (500MB)
+// Maximum file size in bytes (500MB) - but will be chunked for upload
 export const MAX_FILE_SIZE = 500 * 1024 * 1024
 
 // Maximum total files size in bytes (500MB)
@@ -64,6 +91,9 @@ export const MAX_TOTAL_FILES_SIZE = 500 * 1024 * 1024
 
 // Maximum number of files
 export const MAX_FILES = 20
+
+// Chunk size for large file uploads (3MB to stay under Vercel's 4.5MB limit with base64 overhead)
+export const CHUNK_SIZE = 3 * 1024 * 1024
 
 export function generateCode(): string {
   let code: string
@@ -73,11 +103,22 @@ export function generateCode(): string {
   return code
 }
 
+export function generateUploadId(): string {
+  return Date.now().toString() + Math.random().toString(36).substr(2, 9)
+}
+
 export function cleanExpiredPastes() {
   const now = Date.now()
   for (const [code, paste] of pasteStore.entries()) {
     if (now > paste.expiresAt) {
       pasteStore.delete(code)
+    }
+  }
+  
+  // Clean expired chunked uploads
+  for (const [uploadId, upload] of chunkedUploads.entries()) {
+    if (now > upload.expiresAt) {
+      chunkedUploads.delete(uploadId)
     }
   }
 }
@@ -96,5 +137,5 @@ export function formatExpirationTime(ms: number): string {
   }
 }
 
-// Export the store
-export { pasteStore } 
+// Export the stores
+export { pasteStore, chunkedUploads } 

@@ -223,7 +223,7 @@ export default function HomePage() {
                 Share Instantly
               </h1>
               <p className="text-xl text-muted-foreground sm:text-2xl mb-8 max-w-2xl mx-auto">
-                Fast, secure file sharing with no limits. Share text or files up to <strong>500MB</strong> with a simple 4-digit code.
+                Fast, secure file sharing with no limits. Share text or files up to <strong>500MB</strong> with a simple 4-digit code. Large files are automatically optimized for upload.
               </p>
               
               <div className="flex flex-wrap justify-center gap-4 mb-8">
