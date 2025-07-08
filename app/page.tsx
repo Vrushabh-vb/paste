@@ -58,8 +58,14 @@ export default function HomePage() {
     e.preventDefault()
     
     // Validate based on upload type
-    if (uploadType === "text" && !content.trim()) return
-    if (uploadType === "files" && selectedFiles.length === 0 && !selectedFile) return
+    if (uploadType === "text" && !content.trim()) {
+      toast.error("Please enter some text content")
+      return
+    }
+    if (uploadType === "files" && selectedFiles.length === 0 && !selectedFile) {
+      toast.error("Please select files to upload")
+      return
+    }
 
     setIsLoading(true)
     try {

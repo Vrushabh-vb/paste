@@ -168,6 +168,8 @@ export function FileUpload({
         await uploadLargeFile(file, expirationOption)
         toast.success(`Large file "${file.name}" uploaded successfully!`)
         // Large file upload is complete - parent will be notified via callback
+        // Clear the file from state since it's already processed
+        onClearFile()
       } else {
         // Use regular upload for smaller files
         const base64 = await convertToBase64(file)
@@ -225,6 +227,7 @@ export function FileUpload({
             toast.success(`Large file "${file.name}" uploaded successfully!`)
             // Large file upload is complete - parent will be notified via callback
             // Don't add to newFiles array as it's already processed
+            // Note: Large files are processed immediately and create their own paste
           } else {
             // Use regular upload for smaller files
             const base64 = await convertToBase64(file)
@@ -352,6 +355,7 @@ export function FileUpload({
               <FileUp className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
               <p className="text-sm font-medium mb-1">Drag and drop a file here or click to browse</p>
               <p className="text-xs text-muted-foreground">Maximum file size: 500MB • All formats supported</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Large files (&gt;3MB) are processed immediately</p>
             </>
           )}
           <Input 
@@ -423,6 +427,7 @@ export function FileUpload({
               <p className="text-xs text-muted-foreground mt-1">
                 Maximum {MAX_FILES} files, 500MB total • All formats supported
               </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">Large files (&gt;3MB) are processed immediately</p>
             </>
           )}
           <Input 
