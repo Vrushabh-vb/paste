@@ -223,7 +223,7 @@ export default function HomePage() {
                 Share Instantly
               </h1>
               <p className="text-xl text-muted-foreground sm:text-2xl mb-8 max-w-2xl mx-auto">
-                Fast, secure file sharing with no limits. Share text or files up to <strong>100MB</strong> each with a simple 4-digit code.
+                Fast, secure file sharing with no limits. Share text or files up to <strong>500MB</strong> with a simple 4-digit code.
               </p>
               
               <div className="flex flex-wrap justify-center gap-4 mb-8">
@@ -237,7 +237,7 @@ export default function HomePage() {
                 </Badge>
                 <Badge variant="secondary" className="px-4 py-2 text-sm">
                   <FileIcon className="w-4 h-4 mr-2" />
-                  100MB per file
+                  500MB total
                 </Badge>
                 <Badge variant="secondary" className="px-4 py-2 text-sm">
                   <Clock className="w-4 h-4 mr-2" />

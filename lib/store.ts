@@ -56,8 +56,8 @@ export const EXPIRATION_OPTIONS = {
 // Default TTL in milliseconds (30 minutes)
 export const DEFAULT_TTL_MS = EXPIRATION_OPTIONS['30min']
 
-// Maximum file size in bytes (100MB)
-export const MAX_FILE_SIZE = 100 * 1024 * 1024
+// Maximum file size in bytes (500MB)
+export const MAX_FILE_SIZE = 500 * 1024 * 1024
 
 // Maximum total files size in bytes (500MB)
 export const MAX_TOTAL_FILES_SIZE = 500 * 1024 * 1024
