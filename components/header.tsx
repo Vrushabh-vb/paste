@@ -16,7 +16,7 @@ export function Header() {
           <Link href="/" className="flex items-center space-x-2">
             <Copy className="h-5 w-5" />
             <span className="font-semibold">
-              Paste-Here
+              Paste-Here!
             </span>
           </Link>
         </div>
