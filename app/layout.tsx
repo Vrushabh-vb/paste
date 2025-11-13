@@ -4,6 +4,7 @@ import { Inter as FontSans } from "next/font/google"
 import "./globals.css"
 import { Providers } from './providers'
 import { cn } from "@/lib/utils"
+import { Analytics } from "@vercel/analytics/next"
 
 const fontSans = FontSans({
   subsets: ["latin"],
