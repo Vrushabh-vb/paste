@@ -7,7 +7,7 @@ export function Footer() {
         <div className="flex items-center gap-1.5 ml-4">
           {/* <Copy className="h-3.5 w-3.5" /> */}
           <p className="text-xs text-muted-foreground">
-            Paste-Here Online by - VBX© {new Date().getFullYear()}
+            Paste-Here Online 2026© {new Date().getFullYear()}
           </p>
         </div>
         <p className="text-xs text-muted-foreground">
