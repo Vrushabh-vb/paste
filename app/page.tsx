@@ -158,7 +158,6 @@ export default function HomePage() {
         setSelectedFile(null)
         setSelectedFiles([])
 
-
         // Save to history
         try {
           const isCodeSnippet = uploadType === "text" && (
@@ -215,11 +214,15 @@ export default function HomePage() {
           console.error("Failed to save history:", error)
         }
 
-
         toast.success("Share created successfully!")
       } else {
-        toast.error("Failed to create share")
+        const errorData = await response.json()
+        toast.error(errorData.error || "Failed to create share", {
+          description: errorData.details
+        })
       }
+
+
     } catch (error) {
       toast.error("An error occurred")
     } finally {

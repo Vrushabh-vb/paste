@@ -49,7 +49,7 @@ export function FileUpload({
     setIsProcessing(true)
     try {
       const base64 = await convertToBase64(file)
-      onFileSelect({ base64, name: file.name, type: file.type, size: file.size })
+      onFileSelect({ base64, name: file.name, type: file.type || 'text/plain', size: file.size })
       toast.success("File processed")
     } catch (error) {
       toast.error("Processing failed")
@@ -77,7 +77,7 @@ export function FileUpload({
           continue
         }
         const base64 = await convertToBase64(file)
-        newFiles.push({ base64, name: file.name, type: file.type, size: file.size })
+        newFiles.push({ base64, name: file.name, type: file.type || 'text/plain', size: file.size })
         currentTotalSize += file.size
       }
       if (newFiles.length > 0) onFilesSelect([...selectedFiles, ...newFiles])
@@ -128,8 +128,8 @@ export function FileUpload({
         onDragLeave={(e) => handleDrag(e, false)}
         onDrop={handleDrop}
         className={`group relative overflow-hidden h-48 rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer flex flex-col items-center justify-center ${isDragging
-            ? "border-primary bg-primary/5 scale-[0.99]"
-            : "border-slate-200 dark:border-slate-800 hover:border-primary/50 hover:bg-slate-50/50 dark:hover:bg-slate-900/50"
+          ? "border-primary bg-primary/5 scale-[0.99]"
+          : "border-slate-200 dark:border-slate-800 hover:border-primary/50 hover:bg-slate-50/50 dark:hover:bg-slate-900/50"
           } ${isProcessing ? "opacity-50 pointer-events-none" : ""}`}
       >
         <div className="absolute top-4 right-4 group-hover:translate-x-1 transition-transform">

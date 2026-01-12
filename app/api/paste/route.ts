@@ -3,15 +3,15 @@ import { pasteStore, cleanExpiredPastes, generateCode, MAX_FILE_SIZE, MAX_TOTAL_
 
 export async function POST(request: NextRequest) {
   try {
-    const { 
-      content, 
-      fileName, 
-      fileType, 
-      isFile, 
-      files, 
-      isMultiFile, 
+    const {
+      content,
+      fileName,
+      fileType,
+      isFile,
+      files,
+      isMultiFile,
       expirationOption = '30min',
-      allowEditing = false 
+      allowEditing = false
     } = await request.json()
 
     // Validate expiration option
@@ -39,9 +39,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate file name and type
-      if (!fileName || !fileType) {
-        return NextResponse.json({ error: "File name and type are required" }, { status: 400 })
+      if (!fileName) {
+        return NextResponse.json({ error: "File name is required" }, { status: 400 })
       }
+      // If fileType is missing, default to octet-stream
+      const effectiveFileType = fileType || 'application/octet-stream'
+
     }
 
     // For multiple files
@@ -59,9 +62,10 @@ export async function POST(request: NextRequest) {
       // Validate each file and calculate total size
       let totalSize = 0
       for (const file of files) {
-        if (!file.name || !file.type || !file.content) {
-          return NextResponse.json({ error: "Invalid file data" }, { status: 400 })
+        if (!file.name || !file.content) {
+          return NextResponse.json({ error: `Invalid data for file "${file.name || 'unknown'}"` }, { status: 400 })
         }
+
 
         if (!file.content.startsWith('data:') || !file.content.includes(';base64,')) {
           return NextResponse.json({ error: "Invalid file format" }, { status: 400 })
@@ -106,11 +110,12 @@ export async function POST(request: NextRequest) {
         createdAt,
         expiresAt,
         fileName,
-        fileType,
+        fileType: fileType || 'application/octet-stream',
         isFile: true,
         allowEditing,
         downloadCount: 0
       })
+
     } else {
       pasteStore.set(code, {
         content: content.trim(),
@@ -122,11 +127,15 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ code, expiresAt })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error processing paste:", error)
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 })
+    return NextResponse.json({
+      error: "Invalid request",
+      details: error.message || "Unknown error"
+    }, { status: 400 })
   }
 }
+
 
 export async function PUT(request: NextRequest) {
   try {
