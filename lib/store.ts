@@ -1,7 +1,7 @@
 // Define a global type for our store
 declare global {
-  var pasteStoreGlobal: Map<string, { 
-    content: string; 
+  var pasteStoreGlobal: Map<string, {
+    content: string;
     createdAt: number;
     expiresAt: number;
     fileName?: string;
@@ -19,8 +19,8 @@ declare global {
 }
 
 // Use the global object to persist the store between hot reloads in development
-const pasteStore = global.pasteStoreGlobal || new Map<string, { 
-  content: string; 
+const pasteStore = globalThis.pasteStoreGlobal || new Map<string, {
+  content: string;
   createdAt: number;
   expiresAt: number;
   fileName?: string;
@@ -37,7 +37,7 @@ const pasteStore = global.pasteStoreGlobal || new Map<string, {
 }>();
 
 if (process.env.NODE_ENV !== 'production') {
-  global.pasteStoreGlobal = pasteStore;
+  globalThis.pasteStoreGlobal = pasteStore;
 }
 
 // Expiration options in milliseconds
@@ -68,7 +68,7 @@ export const MAX_FILES = 20
 export function generateCode(): string {
   let code: string
   do {
-    code = Math.floor(1000 + Math.random() * 9000).toString()
+    code = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
   } while (pasteStore.has(code))
   return code
 }
@@ -86,7 +86,7 @@ export function formatExpirationTime(ms: number): string {
   const minutes = Math.floor(ms / (1000 * 60))
   const hours = Math.floor(minutes / 60)
   const days = Math.floor(hours / 24)
-  
+
   if (days > 0) {
     return `${days} day${days > 1 ? 's' : ''}`
   } else if (hours > 0) {

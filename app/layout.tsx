@@ -11,9 +11,8 @@ const fontSans = FontSans({
 })
 
 export const metadata: Metadata = {
-  title: "Copy-Paste Online",
-  description: "Share text content with simple 4-digit codes. Fast, secure, and easy to use.",
-  generator: 'v0.dev',
+  title: "PasteHere | Secure & Simple Sharing",
+  description: "Share text, code, and files securely with auto-expiring links. Simple, fast, and private.",
 }
 
 export default function RootLayout({

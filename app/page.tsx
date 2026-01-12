@@ -1,42 +1,41 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Copy, Check, ArrowRight, Clock, Clipboard, FileText, Share2, Upload, FileIcon, Files, Settings, Download } from "lucide-react"
+import {
+  Copy,
+  Check,
+  Search,
+  FileText,
+  Share2,
+  Files,
+  Lock,
+  Shield,
+  Plus,
+  ArrowRight,
+  Code,
+  Zap
+} from "lucide-react"
+import Footer from "@/components/footer"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
 import { toast } from "sonner"
 import { motion } from "framer-motion"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FileUpload } from "@/components/file-upload"
-import { EXPIRATION_OPTIONS, formatExpirationTime } from "@/lib/store"
-
-interface FileData {
-  name: string;
-  type: string;
-  base64: string;
-  size: number;
-}
+import Link from "next/link"
+import { Moon, Sun } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card" // Keep Card imports as it's used for the main card
 
 const expirationLabels: Record<string, string> = {
-  '5min': '5 minutes',
-  '30min': '30 minutes',
-  '1hour': '1 hour',
-  '6hours': '6 hours',
-  '12hours': '12 hours',
-  '1day': '1 day',
-  '3days': '3 days',
-  '7days': '7 days',
-  '30days': '30 days'
+  '5min': '5 Minutes', '30min': '30 Minutes', '1hour': '1 Hour',
+  '6hours': '6 Hours', '12hours': '12 Hours', '1day': '1 Day',
+  '3days': '3 Days', '7days': '7 Days', '30days': '30 Days'
 }
 
 export default function HomePage() {
@@ -44,68 +43,113 @@ export default function HomePage() {
   const [generatedCode, setGeneratedCode] = useState<string | null>(null)
   const [generatedExpiresAt, setGeneratedExpiresAt] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [viewCode, setViewCode] = useState("")
+  const [viewCode, setViewCode] = useState("") // Keep viewCode for the nav bar recall
   const [uploadType, setUploadType] = useState<"text" | "files">("text")
-  const [selectedFile, setSelectedFile] = useState<FileData | null>(null)
-  const [selectedFiles, setSelectedFiles] = useState<FileData[]>([])
-  const [allowMultiple, setAllowMultiple] = useState(true)
+  const [selectedFile, setSelectedFile] = useState<any>(null)
+  const [selectedFiles, setSelectedFiles] = useState<any[]>([])
   const [expirationOption, setExpirationOption] = useState<string>("30min")
   const [allowEditing, setAllowEditing] = useState(false)
   const router = useRouter()
+  const [theme, setTheme] = useState<"light" | "dark">("light")
+  const [autoPaste, setAutoPaste] = useState(true)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Validate based on upload type
-    if (uploadType === "text" && !content.trim()) return
-    if (uploadType === "files" && selectedFiles.length === 0 && !selectedFile) return
+  useEffect(() => {
+    // Check system/saved theme on mount
+    const savedTheme = localStorage.getItem("theme")
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+    const initialTheme = savedTheme as "light" | "dark" || systemTheme
+    setTheme(initialTheme)
+    document.documentElement.classList.toggle("dark", initialTheme === "dark")
 
+    // Check auto-paste preference
+    const savedAutoPaste = localStorage.getItem("autoPaste")
+    if (savedAutoPaste !== null) {
+      setAutoPaste(savedAutoPaste === "true")
+    }
+  }, [])
+
+  const toggleAutoPaste = () => {
+    const newVal = !autoPaste
+    setAutoPaste(newVal)
+    localStorage.setItem("autoPaste", String(newVal))
+    toast.message(`Auto-Flow ${newVal ? 'on' : 'off'}`, {
+      description: newVal ? "Paste will auto-generate code" : "Paste will only fill the text area"
+    })
+  }
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light"
+    setTheme(newTheme)
+    localStorage.setItem("theme", newTheme)
+    document.documentElement.classList.toggle("dark", newTheme === "dark")
+  }
+
+  const copyToClipboard = async (text: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(successMessage);
+    } catch (err) {
+      // Fallback method for when clipboard API is blocked
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        toast.success(successMessage);
+      } catch (e) {
+        toast.error("Failed to copy. Please copy manually: " + text);
+      }
+      document.body.removeChild(textArea);
+    }
+  }
+
+  const handleSubmit = async (e?: React.FormEvent, contentOverride?: string) => {
+    if (e) e.preventDefault()
+    const textToSubmit = contentOverride !== undefined ? contentOverride : content
+    if (uploadType === "text" && !textToSubmit.trim()) {
+      if (!contentOverride) toast.error("Please enter some content")
+      return
+    }
+    if (uploadType === "files" && selectedFiles.length === 0 && !selectedFile) {
+      toast.error("Please select a file")
+      return
+    }
     setIsLoading(true)
     try {
       let payload;
-      
       if (uploadType === "text") {
-        payload = { 
-          content, 
-          isFile: false,
-          expirationOption,
-          allowEditing: allowEditing && uploadType === "text" // Only allow editing for text
-        };
-      } else if (uploadType === "files") {
-        // If only one file is selected
+        payload = { content: textToSubmit, isFile: false, expirationOption, allowEditing }
+      } else {
         if (selectedFiles.length === 0 && selectedFile) {
-          payload = { 
+          payload = {
             content: selectedFile.base64,
             fileName: selectedFile.name,
             fileType: selectedFile.type,
             isFile: true,
-            expirationOption,
-            allowEditing: false // Files can't be edited
-          };
+            expirationOption
+          }
         } else {
-          // For multiple files
           payload = {
-            files: selectedFiles.map(file => ({
-              content: file.base64,
-              name: file.name,
-              type: file.type
+            files: selectedFiles.map(f => ({
+              content: f.base64,
+              name: f.name,
+              type: f.type
             })),
             isMultiFile: true,
-            expirationOption,
-            allowEditing: false // Files can't be edited
-          };
+            expirationOption
+          }
         }
       }
-
       const response = await fetch("/api/paste", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
-
       if (response.ok) {
         const { code, expiresAt } = await response.json()
         setGeneratedCode(code)
@@ -113,375 +157,373 @@ export default function HomePage() {
         setContent("")
         setSelectedFile(null)
         setSelectedFiles([])
-        toast.success("Share link generated successfully!")
+
+
+        // Save to history
+        try {
+          const isCodeSnippet = uploadType === "text" && (
+            textToSubmit.includes("{") ||
+            textToSubmit.includes("}") ||
+            textToSubmit.includes("function") ||
+            textToSubmit.includes("const ") ||
+            textToSubmit.includes("import ") ||
+            textToSubmit.includes("<") ||
+            textToSubmit.includes("=>")
+          );
+
+          const shareType = uploadType === "text" ? (isCodeSnippet ? "code" : "text") : (selectedFiles.length > 1 ? "multi" : "file")
+          const historyItem = {
+            code,
+            type: shareType,
+            createdAt: Date.now(),
+            expiresAt
+          }
+
+          const existing = localStorage.getItem("shareHistory")
+          const history = existing ? JSON.parse(existing) : []
+          history.push(historyItem)
+          localStorage.setItem("shareHistory", JSON.stringify(history))
+
+          // Also save the full paste data to localStorage
+          const pasteData: any = {
+            createdAt: Date.now(),
+            expiresAt,
+            allowEditing,
+            isCode: isCodeSnippet
+          }
+
+          if (uploadType === "text") {
+            pasteData.content = textToSubmit
+            pasteData.isFile = false
+          } else if (selectedFiles.length > 1) {
+            pasteData.files = selectedFiles.map(f => ({
+              name: f.name,
+              type: f.type,
+              content: f.base64
+            }))
+            pasteData.isMultiFile = true
+            pasteData.content = ""
+          } else if (selectedFile) {
+            pasteData.content = selectedFile.base64
+            pasteData.fileName = selectedFile.name
+            pasteData.fileType = selectedFile.type
+            pasteData.isFile = true
+          }
+
+          localStorage.setItem(`paste_${code}`, JSON.stringify(pasteData))
+        } catch (error) {
+          console.error("Failed to save history:", error)
+        }
+
+
+        toast.success("Share created successfully!")
       } else {
-        const error = await response.json()
-        toast.error(error.error || "Failed to generate share link. Please try again.")
+        toast.error("Failed to create share")
       }
     } catch (error) {
-      toast.error("An error occurred. Please try again.")
-      console.error("Error creating paste:", error)
+      toast.error("An error occurred")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleViewCode = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (viewCode.trim() && /^\d{4}$/.test(viewCode)) {
-      router.push(`/view/${viewCode.trim()}`)
-    }
-  }
-
-  const copyToClipboard = async (text: string) => {
-    if (!text) return
-    
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      toast.success("Copied to clipboard!")
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error("Copy failed:", err)
-      
-      // Fallback for older browsers
-      try {
-        const textArea = document.createElement("textarea")
-        textArea.value = text
-        document.body.appendChild(textArea)
-        textArea.select()
-        const successful = document.execCommand("copy")
-        document.body.removeChild(textArea)
-        
-        if (successful) {
-          setCopied(true)
-          toast.success("Copied to clipboard!")
-          setTimeout(() => setCopied(false), 2000)
-        } else {
-          toast.error("Failed to copy to clipboard")
-        }
-      } catch (fallbackErr) {
-        console.error("Fallback copy failed:", fallbackErr)
-        toast.error("Your browser doesn't support clipboard operations")
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const pastedText = e.clipboardData.getData('text')
+    if (pastedText && uploadType === "text") {
+      setContent(pastedText)
+      // Only submit if autoPaste is ON
+      if (autoPaste) {
+        handleSubmit(undefined, pastedText)
       }
     }
   }
 
-  const copyCode = () => {
-    if (generatedCode) copyToClipboard(generatedCode)
-  }
-  
-  const copyViewUrl = () => {
-    if (generatedCode) copyToClipboard(`${window.location.origin}/view/${generatedCode}`)
-  }
-
-  const handleFileSelect = (fileData: FileData) => {
-    if (allowMultiple) {
-      setSelectedFiles([fileData])
+  const handleRecall = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (viewCode.match(/^\d{4}$/)) {
+      router.push(`/view/${viewCode}`)
     } else {
-      setSelectedFile(fileData)
+      toast.error("Enter a valid 4-digit code")
     }
   }
 
-  const handleFilesSelect = (filesData: FileData[]) => {
-    setSelectedFiles(filesData)
-    setSelectedFile(null)
-  }
-
-  const clearFile = () => {
-    setSelectedFile(null)
-  }
-  
-  const clearFiles = () => {
-    setSelectedFiles([])
-  }
-
-  const getTimeRemaining = () => {
-    if (!generatedExpiresAt) return ""
-    const remaining = generatedExpiresAt - Date.now()
-    return formatExpirationTime(remaining)
-  }
-
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      <Header />
-      <main className="flex-1 flex flex-col items-center justify-center relative">
-        {/* Background decoration */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-3xl"></div>
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-indigo-400/20 to-cyan-400/20 rounded-full blur-3xl"></div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      {/* Top Navigation */}
+      <nav className="sticky top-0 z-50 border-b bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="h-9 w-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
+              <Zap className="h-5 w-5 fill-white" />
+            </div>
+            <span className="font-bold text-xl tracking-tight">Paste<span className="text-blue-600">Here</span></span>
+          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/recent" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">Recent</Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleTheme}
+              className="h-9 w-9 p-0"
+            >
+              {theme === "light" ? (
+                <Moon className="h-5 w-5" />
+              ) : (
+                <Sun className="h-5 w-5" />
+              )}
+            </Button>
+            <div className="hidden sm:flex items-center gap-2 pl-2 border-l">
+              <span className="text-[10px] font-black uppercase text-muted-foreground tracking-tight">Auto-Flow</span>
+              <Switch checked={autoPaste} onCheckedChange={toggleAutoPaste} />
+            </div>
+          </div>
         </div>
+      </nav>
 
-        <div className="w-full max-w-4xl px-4 py-8 relative z-10">
-          <section className="mb-12 text-center">
-            <motion.div
-              initial={{ opacity: 0, y: -30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent leading-tight tracking-tight md:text-5xl lg:text-6xl mb-4">
-                Share Instantly
+      <main className="max-w-7xl mx-auto px-6 py-12">
+        {!generatedCode ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-8"
+          >
+            {/* Header */}
+            <div className="text-center space-y-3">
+              <h1 className="text-5xl font-black tracking-tight">
+                Share Instantly. <span className="text-blue-600">Secure by Design.</span>
               </h1>
-              <p className="text-xl text-muted-foreground sm:text-2xl mb-8 max-w-2xl mx-auto">
-                Fast, secure file sharing with no limits. Share text or files up to <strong>500MB</strong> with a simple 4-digit code.
+              <p className="text-lg text-muted-foreground font-medium">
+                Share text snippets, code, or files with a simple 4-digit code
               </p>
-              
-              <div className="flex flex-wrap justify-center gap-4 mb-8">
-                <Badge variant="secondary" className="px-4 py-2 text-sm">
-                  <FileIcon className="w-4 h-4 mr-2" />
-                  Lightning Fast
-                </Badge>
-                <Badge variant="secondary" className="px-4 py-2 text-sm">
-                  <Clipboard className="w-4 h-4 mr-2" />
-                  Secure & Private
-                </Badge>
-                <Badge variant="secondary" className="px-4 py-2 text-sm">
-                  <FileIcon className="w-4 h-4 mr-2" />
-                  500MB total
-                </Badge>
-                <Badge variant="secondary" className="px-4 py-2 text-sm">
-                  <Clock className="w-4 h-4 mr-2" />
-                  Custom Expiry
-                </Badge>
-              </div>
-            </motion.div>
-          </section>
+            </div>
 
-          <section className="grid lg:grid-cols-2 gap-8">
-            {/* Main Upload Card */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
-              <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm dark:bg-slate-900/80 w-full">
-                <CardHeader className="space-y-1 pb-6 text-center">
-                  <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    Create New Share
-                  </CardTitle>
-                  <CardDescription className="text-base">
-                    Share text or files with advanced options
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {!generatedCode ? (
-                    <div className="space-y-6">
-                      <Tabs 
-                        defaultValue="text" 
-                        className="w-full"
-                        onValueChange={(value) => setUploadType(value as "text" | "files")}
-                      >
-                        <TabsList className="grid w-full grid-cols-2 mb-6 h-11">
-                          <TabsTrigger value="text" className="flex items-center gap-2 text-sm">
-                            <FileText className="h-4 w-4" />
-                            Text Content
-                          </TabsTrigger>
-                          <TabsTrigger value="files" className="flex items-center gap-2 text-sm">
-                            <Files className="h-4 w-4" />
-                            File Upload
-                          </TabsTrigger>
-                        </TabsList>
-                        
-                        <TabsContent value="text" className="mt-0 space-y-4">
-                          <div className="space-y-3">
-                            <Label htmlFor="content" className="text-sm font-medium">
-                              Text Content
-                            </Label>
-                            <Textarea
-                              id="content"
-                              value={content}
-                              onChange={(e) => setContent(e.target.value)}
-                              placeholder="Paste or type your content here..."
-                              className="min-h-[200px] resize-y border-2 focus:border-blue-500 transition-colors"
-                              required
-                            />
-                          </div>
-                        </TabsContent>
-                        
-                        <TabsContent value="files" className="mt-0">
-                          <FileUpload 
-                            onFileSelect={handleFileSelect}
-                            onFilesSelect={handleFilesSelect}
-                            onClearFile={clearFile}
-                            onClearFiles={clearFiles}
-                            selectedFile={selectedFile}
-                            selectedFiles={selectedFiles}
-                            multiple={allowMultiple}
-                          />
-                        </TabsContent>
-                      </Tabs>
-                      
-                      {/* Settings Section */}
-                      <Card className="bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-sm font-medium flex items-center gap-2">
-                            <Settings className="h-4 w-4" />
-                            Share Settings
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="expiration" className="text-sm font-medium">
-                              Expires after
-                            </Label>
-                            <Select value={expirationOption} onValueChange={setExpirationOption}>
-                              <SelectTrigger id="expiration">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(expirationLabels).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>
-                                    {label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          {uploadType === "text" && (
-                            <div className="flex items-center justify-between">
-                              <div className="space-y-0.5">
-                                <Label htmlFor="editing" className="text-sm font-medium">
-                                  Allow editing
-                                </Label>
-                                <p className="text-xs text-muted-foreground">
-                                  Let viewers edit this content
-                                </p>
-                              </div>
-                              <Switch
-                                id="editing"
-                                checked={allowEditing}
-                                onCheckedChange={setAllowEditing}
-                              />
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                      
-                      <form onSubmit={handleSubmit}>
-                        <Button 
-                          type="submit" 
-                          disabled={
-                            isLoading || 
-                            (uploadType === "text" && !content.trim()) ||
-                            (uploadType === "files" && selectedFiles.length === 0 && !selectedFile)
-                          } 
-                          className="w-full py-6 text-lg font-medium bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transform transition-all duration-200 hover:scale-[1.02] shadow-lg"
-                          size="lg"
-                        >
-                          {isLoading ? (
-                            <>
-                              <span className="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Share2 className="mr-3 h-5 w-5" />
-                              Generate Share Link
-                            </>
-                          )}
-                        </Button>
-                      </form>
-                    </div>
-                  ) : (
-                    <motion.div 
-                      className="space-y-6 text-center"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.4 }}
-                    >
-                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 rounded-xl p-8 border border-green-200 dark:border-green-800">
-                        <h2 className="text-xl font-semibold text-green-700 dark:text-green-400 mb-4 flex items-center justify-center gap-2">
-                          <Check className="w-5 h-5" />
-                          Share Link Generated!
-                        </h2>
-                        <div className="text-6xl font-mono font-bold mb-6 text-slate-800 dark:text-slate-200 tracking-wider">
-                          {generatedCode}
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-3 justify-center mb-4">
-                          <Button onClick={copyCode} variant="outline" size="lg" className="flex items-center gap-2 font-medium">
-                            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                            Copy Code
-                          </Button>
-                          <Button onClick={copyViewUrl} variant="outline" size="lg" className="flex items-center gap-2 font-medium">
-                            <Share2 className="w-4 h-4" />
-                            Copy Full Link
-                          </Button>
-                        </div>
-                        <div className="flex items-center justify-center text-sm text-muted-foreground">
-                          <Clock className="w-4 h-4 mr-2" />
-                          <p>Expires in {getTimeRemaining()}</p>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => {
-                          setGeneratedCode(null)
-                          setGeneratedExpiresAt(null)
-                          setCopied(false)
-                        }}
-                        variant="outline"
-                        className="w-full py-3"
-                        size="lg"
-                      >
-                        Create Another Share
-                      </Button>
-                    </motion.div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
+            {/* Two Column Layout - Create Share & Recall Code */}
+            <div className="grid lg:grid-cols-2 gap-8">
+              {/* Main Share Card */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border shadow-2xl overflow-hidden">
+                <Tabs defaultValue="text" onValueChange={v => setUploadType(v as any)}>
+                  {/* Tab Selector */}
+                  <div className="p-6 pb-0">
+                    <TabsList className="grid w-full grid-cols-2 h-12">
+                      <TabsTrigger value="text" className="text-base font-semibold">
+                        <Code className="h-4 w-4 mr-2" />
+                        Text / Code
+                      </TabsTrigger>
+                      <TabsTrigger value="files" className="text-base font-semibold">
+                        <Files className="h-4 w-4 mr-2" />
+                        Files
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
 
-            {/* View Card */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm dark:bg-slate-900/80 w-full">
-                <CardHeader className="space-y-1 pb-6 text-center">
-                  <CardTitle className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                    Access Shared Content
-                  </CardTitle>
-                  <CardDescription className="text-base">
-                    Enter a 4-digit code to view shared content
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleViewCode} className="space-y-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="viewCode" className="text-sm font-medium">
-                        Enter Share Code
-                      </Label>
-                      <Input
-                        id="viewCode"
-                        value={viewCode}
-                        onChange={(e) => setViewCode(e.target.value)}
-                        placeholder="0000"
-                        pattern="\d{4}"
-                        maxLength={4}
-                        className="font-mono text-center text-2xl h-16 border-2 focus:border-purple-500 transition-colors tracking-widest"
+                  {/* Content Area */}
+                  <div className="p-6 space-y-6">
+                    <TabsContent value="text" className="mt-0">
+                      <Textarea
+                        value={content}
+                        onChange={e => setContent(e.target.value)}
+                        onPaste={handlePaste}
+                        placeholder="Paste your text, code snippet, or any content here..."
+                        className="min-h-[320px] text-base font-mono resize-none"
                       />
+                    </TabsContent>
+
+                    <TabsContent value="files" className="mt-0">
+                      <FileUpload
+                        onFileSelect={setSelectedFile}
+                        onFilesSelect={setSelectedFiles}
+                        onClearFile={() => setSelectedFile(null)}
+                        onClearFiles={() => setSelectedFiles([])}
+                        selectedFile={selectedFile}
+                        selectedFiles={selectedFiles}
+                        multiple
+                      />
+                    </TabsContent>
+
+                    {/* Options */}
+                    <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold">Expiration Time</Label>
+                        <Select value={expirationOption} onValueChange={setExpirationOption}>
+                          <SelectTrigger className="h-11">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(expirationLabels).map(([v, l]) => (
+                              <SelectItem key={v} value={v}>{l}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {uploadType === "text" && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-semibold">Options</Label>
+                          <div className="flex items-center justify-between h-11 px-4 rounded-lg border bg-slate-50 dark:bg-slate-900">
+                            <span className="text-sm font-medium">Allow Editing</span>
+                            <Switch checked={allowEditing} onCheckedChange={setAllowEditing} />
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <Button 
-                      type="submit" 
-                      disabled={!viewCode.trim() || !/^\d{4}$/.test(viewCode)}
-                      className="w-full py-6 text-lg font-medium bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transform transition-all duration-200 hover:scale-[1.02] shadow-lg"
-                      size="lg"
+
+                    {/* Submit Button */}
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isLoading}
+                      className="w-full h-14 text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                     >
-                      <ArrowRight className="w-5 h-5 mr-3" />
+                      {isLoading ? (
+                        "Creating Share..."
+                      ) : (
+                        <>
+                          <Lock className="h-5 w-5 mr-2" />
+                          Create Secure Share
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </Tabs>
+              </div>
+
+              {/* Recall Code Card - Side by Side */}
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-8 shadow-2xl flex flex-col justify-center relative overflow-hidden">
+                {/* Decorative Background Elements */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
+
+                <div className="relative z-10">
+                  {/* Icon */}
+                  <div className="flex justify-center mb-6">
+                    <div className="h-20 w-20 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center">
+                      <Search className="h-10 w-10 text-white" />
+                    </div>
+                  </div>
+
+                  <div className="text-center mb-8">
+                    <h2 className="text-3xl font-black text-white mb-3">Already Have a Code?</h2>
+                    <p className="text-slate-300 text-lg">Enter your 4-digit code to access shared content</p>
+                  </div>
+
+                  <form onSubmit={handleRecall} className="space-y-4">
+                    <Input
+                      value={viewCode}
+                      onChange={e => setViewCode(e.target.value)}
+                      placeholder="Enter 4-digit code"
+                      maxLength={4}
+                      className="h-14 text-center text-2xl font-mono tracking-widest bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 flex-1"
+                    />
+                    <Button
+                      type="submit"
+                      size="lg"
+                      className="h-14 px-8 bg-white text-slate-900 hover:bg-slate-100 font-bold"
+                    >
+                      <Search className="h-5 w-5 mr-2" />
                       Access Content
+                      <ArrowRight className="h-5 w-5 ml-2" />
                     </Button>
                   </form>
-                </CardContent>
-                <CardFooter className="flex justify-center border-t pt-6 text-sm text-muted-foreground">
-                  <p className="text-center">
-                    Don't have a code? Create a new share on the left to get started.
-                  </p>
-                </CardFooter>
-              </Card>
-            </motion.div>
-          </section>
-        </div>
+
+                  {/* Quick Stats */}
+                  <div className="mt-8 pt-6 border-t border-slate-700/50">
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                      <div>
+                        <div className="text-2xl font-black text-white mb-1">256-bit</div>
+                        <div className="text-xs text-slate-400 font-medium">Encryption</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black text-white mb-1">Instant</div>
+                        <div className="text-xs text-slate-400 font-medium">Access</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Features */}
+            <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-green-600" />
+                <span className="font-medium">End-to-End Encrypted</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-blue-600" />
+                <span className="font-medium">Auto-Expiring</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="h-4 w-4 text-purple-600" />
+                <span className="font-medium">No Permanent Storage</span>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="space-y-8 py-12"
+          >
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-12 text-center border-2 border-blue-200 dark:border-blue-900">
+              <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-green-100 dark:bg-green-900/30 mb-6">
+                <Check className="h-8 w-8 text-green-600" />
+              </div>
+
+              <h2 className="text-3xl font-black mb-3">Share Created Successfully!</h2>
+              <p className="text-muted-foreground mb-8 text-lg">Your secure code is ready to share</p>
+
+              <div className="bg-white dark:bg-slate-900 w-fit mx-auto px-16 py-12 rounded-3xl shadow-2xl mb-8 cursor-pointer hover:scale-105 transition-transform" onClick={() => {
+                if (generatedCode) {
+                  copyToClipboard(generatedCode, "Code copied to clipboard!");
+                }
+              }}>
+                <div className="text-7xl font-black text-blue-600 tracking-widest">{generatedCode}</div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-4">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => {
+                    if (generatedCode) {
+                      copyToClipboard(generatedCode, "Code copied!");
+                    }
+                  }}
+                  className="h-12 px-6 font-semibold"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Code
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={() => {
+                    if (generatedCode) {
+                      copyToClipboard(`${window.location.origin}/view/${generatedCode}`, "Link copied!");
+                    }
+                  }}
+                  className="h-12 px-6 font-semibold bg-gradient-to-r from-blue-600 to-indigo-600"
+                >
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Copy Link
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={() => {
+                  setGeneratedCode(null);
+                  setGeneratedExpiresAt(null);
+                }}
+                className="font-semibold"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Another Share
+              </Button>
+            </div>
+          </motion.div>
+        )}
       </main>
       <Footer />
     </div>
