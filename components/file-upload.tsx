@@ -4,16 +4,15 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { FileUp, X, File, Plus, Trash2, CloudUpload, ShieldCheck, CheckCircle2 } from "lucide-react"
+import { FileUp, X, File as FileIcon, Plus, Trash2, CloudUpload, ShieldCheck, CheckCircle2 } from "lucide-react"
 import { MAX_FILE_SIZE, MAX_FILES, MAX_TOTAL_FILES_SIZE } from "@/lib/store"
-import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { motion, AnimatePresence } from "framer-motion"
 
-interface FileData {
+export interface FileData {
+  file: File;
   name: string;
   type: string;
-  base64: string;
   size: number;
 }
 
@@ -37,62 +36,39 @@ export function FileUpload({
   multiple = false
 }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileChange = async (file: File | null) => {
+  const handleFileChange = (file: File | null) => {
     if (!file) return
     if (file.size > MAX_FILE_SIZE) {
       toast.error(`File size exceeds 500MB limit`)
       return
     }
-    setIsProcessing(true)
-    try {
-      const base64 = await convertToBase64(file)
-      onFileSelect({ base64, name: file.name, type: file.type || 'text/plain', size: file.size })
-      toast.success("File processed")
-    } catch (error) {
-      toast.error("Processing failed")
-    } finally {
-      setIsProcessing(false)
-    }
+    // Just pass the file object directly, don't read into memory!
+    onFileSelect({ file, name: file.name, type: file.type || 'application/octet-stream', size: file.size })
   }
 
-  const handleFilesChange = async (filesList: FileList | null) => {
+  const handleFilesChange = (filesList: FileList | null) => {
     if (!filesList || filesList.length === 0) return
     const totalFiles = selectedFiles.length + filesList.length
     if (totalFiles > MAX_FILES) {
       toast.error(`Limit reached (${MAX_FILES} files)`)
       return
     }
-    setIsProcessing(true)
+
     const newFiles: FileData[] = []
     let currentTotalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0)
 
-    try {
-      for (let i = 0; i < filesList.length; i++) {
-        const file = filesList[i]
-        if (file.size > MAX_FILE_SIZE || currentTotalSize + file.size > MAX_TOTAL_FILES_SIZE) {
-          toast.error(`${file.name} exceeds limits`)
-          continue
-        }
-        const base64 = await convertToBase64(file)
-        newFiles.push({ base64, name: file.name, type: file.type || 'text/plain', size: file.size })
-        currentTotalSize += file.size
+    for (let i = 0; i < filesList.length; i++) {
+      const file = filesList[i]
+      if (file.size > MAX_FILE_SIZE || currentTotalSize + file.size > MAX_TOTAL_FILES_SIZE) {
+        toast.error(`${file.name} exceeds limits`)
+        continue
       }
-      if (newFiles.length > 0) onFilesSelect([...selectedFiles, ...newFiles])
-    } finally {
-      setIsProcessing(false)
+      newFiles.push({ file, name: file.name, type: file.type || 'application/octet-stream', size: file.size })
+      currentTotalSize += file.size
     }
-  }
-
-  const convertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = reject
-    })
+    if (newFiles.length > 0) onFilesSelect([...selectedFiles, ...newFiles])
   }
 
   const handleDrag = (e: React.DragEvent, active: boolean) => {
@@ -130,30 +106,23 @@ export function FileUpload({
         className={`group relative overflow-hidden h-48 rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer flex flex-col items-center justify-center ${isDragging
           ? "border-primary bg-primary/5 scale-[0.99]"
           : "border-slate-200 dark:border-slate-800 hover:border-primary/50 hover:bg-slate-50/50 dark:hover:bg-slate-900/50"
-          } ${isProcessing ? "opacity-50 pointer-events-none" : ""}`}
+          }`}
       >
         <div className="absolute top-4 right-4 group-hover:translate-x-1 transition-transform">
           <ShieldCheck className="h-5 w-5 text-slate-300 dark:text-slate-700" />
         </div>
 
-        {isProcessing ? (
-          <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
-            <div className="h-10 w-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-            <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Encrypting Assets...</p>
+        <div className="text-center p-6 space-y-4">
+          <div className={`mx-auto h-12 w-12 rounded-xl flex items-center justify-center transition-all duration-300 ${isDragging ? "bg-primary text-white scale-110" : "bg-primary/10 text-primary group-hover:scale-110"}`}>
+            <CloudUpload className="h-6 w-6" />
           </div>
-        ) : (
-          <div className="text-center p-6 space-y-4">
-            <div className={`mx-auto h-12 w-12 rounded-xl flex items-center justify-center transition-all duration-300 ${isDragging ? "bg-primary text-white scale-110" : "bg-primary/10 text-primary group-hover:scale-110"}`}>
-              <CloudUpload className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-bold mb-1">Click or drag files to share</p>
-              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
-                Up to 500MB • All formats secured
-              </p>
-            </div>
+          <div>
+            <p className="text-sm font-bold mb-1">Click or drag files to share</p>
+            <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+              Up to 500MB • All formats secured
+            </p>
           </div>
-        )}
+        </div>
 
         <Input
           ref={fileInputRef}
@@ -202,7 +171,7 @@ export function FileUpload({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 group-hover:bg-primary/5 group-hover:text-primary transition-colors">
-                        <File className="h-4.5 w-4.5" />
+                        <FileIcon className="h-4.5 w-4.5" />
                       </div>
                       <div className="truncate">
                         <p className="text-sm font-bold truncate pr-4">{file.name}</p>
