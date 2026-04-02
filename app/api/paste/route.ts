@@ -74,39 +74,15 @@ export async function POST(request: NextRequest) {
 
     // ── Single file upload ────────────────────────────────
     if (isFile && !isMultiFile) {
-      if (!content || !content.startsWith("data:") || !content.includes(";base64,")) {
-        return NextResponse.json({ error: "Invalid file format" }, { status: 400 })
-      }
-      if (!fileName) {
-        return NextResponse.json({ error: "File name is required" }, { status: 400 })
+      if (!fileName || !fileType) {
+        return NextResponse.json({ error: "File name and type are required" }, { status: 400 })
       }
 
-      const base64Part = content.split(";base64,")[1]
-      const fileSize = (base64Part.length * 3) / 4
-      if (fileSize > MAX_FILE_SIZE) {
-        return NextResponse.json(
-          { error: `File exceeds ${Math.floor(MAX_FILE_SIZE / (1024 * 1024))}MB limit` },
-          { status: 400 }
-        )
-      }
+      const fileUrl = body.fileUrl;
+      const fileSize = body.fileSize;
 
-      // Upload to Vercel Blob
-      const buffer = Buffer.from(base64Part, "base64")
-      const effectiveType = fileType || "application/octet-stream"
-
-      let blobUrl: string
-      try {
-        const blob = await put(`pastes/${Date.now()}_${fileName}`, buffer, {
-          access: "public",
-          contentType: effectiveType,
-        })
-        blobUrl = blob.url
-      } catch (blobErr: any) {
-        console.error("Blob upload failed:", blobErr)
-        return NextResponse.json(
-          { error: "File upload failed", details: blobErr.message },
-          { status: 500 }
-        )
+      if (!fileUrl) {
+        return NextResponse.json({ error: "File URL is missing (upload to blob failed)" }, { status: 400 })
       }
 
       const code = await generateCode()
@@ -115,9 +91,9 @@ export async function POST(request: NextRequest) {
         createdAt,
         expiresAt,
         fileName,
-        fileType: effectiveType,
+        fileType,
         isFile: true,
-        files: [{ name: fileName, type: effectiveType, url: blobUrl, size: fileSize }],
+        files: [{ name: fileName, type: fileType, url: fileUrl, size: fileSize }],
         allowEditing,
         downloadCount: 0,
       }
@@ -142,44 +118,19 @@ export async function POST(request: NextRequest) {
       const blobRefs: BlobFileRef[] = []
 
       for (const file of files) {
-        if (!file.name || !file.content) {
+        if (!file.name || !file.url) {
           return NextResponse.json(
             { error: `Invalid data for file "${file.name || "unknown"}"` },
             { status: 400 }
           )
         }
-        if (!file.content.startsWith("data:") || !file.content.includes(";base64,")) {
-          return NextResponse.json({ error: "Invalid file format" }, { status: 400 })
-        }
 
-        const base64Part = file.content.split(";base64,")[1]
-        const fileSize = (base64Part.length * 3) / 4
+        const fileSize = file.size || 0
         totalSize += fileSize
 
-        if (fileSize > MAX_FILE_SIZE) {
-          return NextResponse.json(
-            { error: `File "${file.name}" exceeds ${Math.floor(MAX_FILE_SIZE / (1024 * 1024))}MB` },
-            { status: 400 }
-          )
-        }
-
-        // Upload each file to Vercel Blob
-        const buffer = Buffer.from(base64Part, "base64")
         const fileContentType = file.type || "application/octet-stream"
 
-        try {
-          const blob = await put(`pastes/${Date.now()}_${file.name}`, buffer, {
-            access: "public",
-            contentType: fileContentType,
-          })
-          blobRefs.push({ name: file.name, type: fileContentType, url: blob.url, size: fileSize })
-        } catch (blobErr: any) {
-          console.error(`Blob upload failed for ${file.name}:`, blobErr)
-          return NextResponse.json(
-            { error: `Upload failed for "${file.name}"`, details: blobErr.message },
-            { status: 500 }
-          )
-        }
+        blobRefs.push({ name: file.name, type: fileContentType, url: file.url, size: fileSize })
       }
 
       if (totalSize > MAX_TOTAL_FILES_SIZE) {
