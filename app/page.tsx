@@ -79,6 +79,7 @@ export default function HomePage() {
   const { theme, setTheme } = useTheme()
   const [autoPaste, setAutoPaste] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [showMonkey, setShowMonkey] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -247,6 +248,15 @@ export default function HomePage() {
 
   const handleRecall = (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Easter Egg
+    if (viewCode === "0000") {
+      setShowMonkey(true)
+      setTimeout(() => setShowMonkey(false), 5000)
+      setViewCode("")
+      return
+    }
+
     if (viewCode.match(/^\d{4,5}$/)) {
       router.push(`/view/${viewCode}`)
     } else {
@@ -259,6 +269,26 @@ export default function HomePage() {
       <div className="relative min-h-screen overflow-hidden">
         {/* Three.js Dotted Surface Background */}
         <DottedSurface className="opacity-40" />
+
+        {/* Monkey Easter Egg */}
+        <AnimatePresence>
+          {showMonkey && (
+            <motion.div
+              initial={{ scale: 0, rotate: -180, opacity: 0 }}
+              animate={{ scale: 1, rotate: 0, opacity: 1 }}
+              exit={{ scale: 0, rotate: 180, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 260, damping: 20 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowMonkey(false)}
+            >
+              <img
+                src="/funny-monkey-with-banana.jpg"
+                alt="Monkey Magic"
+                className="max-w-full max-h-[80vh] object-contain rounded-3xl shadow-2xl shadow-amber-500/50"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Top Navigation */}
         <nav className="sticky top-0 z-50 border-b border-border/40 bg-background/60 backdrop-blur-2xl backdrop-saturate-150">
