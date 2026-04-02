@@ -1,13 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
+  // Allow larger request bodies for file uploads (up to 50MB via JSON)
+  // Files larger than this should use Vercel Blob client-side upload
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
   },
   images: {
     unoptimized: true,
-  },
-  turbopack: {
-    root: process.cwd(),
   },
 }
 
