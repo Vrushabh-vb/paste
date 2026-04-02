@@ -14,14 +14,7 @@ import {
 } from "@/lib/store"
 import type { PasteRecord, BlobFileRef } from "@/lib/store"
 
-// Increase body size limit for Next.js API routes
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',  // Allow up to 50MB JSON body for text + small files
-    },
-  },
-}
+// Removed invalid Pages router config object
 
 // ─── POST: Create a new paste ────────────────────────────
 export async function POST(request: NextRequest) {
