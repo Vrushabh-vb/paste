@@ -35,6 +35,7 @@ import Link from "next/link"
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { DottedSurface } from "@/components/ui/dotted-surface"
+import { upload } from "@vercel/blob/client"
 import {
   Card,
   CardContent,
@@ -141,20 +142,34 @@ export default function HomePage() {
         payload = { content: textToSubmit, isFile: false, expirationOption, allowEditing }
       } else {
         if (selectedFiles.length === 0 && selectedFile) {
+          const blob = await upload(`pastes/${Date.now()}_${selectedFile.name}`, selectedFile.file, {
+            access: "public",
+            handleUploadUrl: "/api/upload",
+          })
           payload = {
-            content: selectedFile.base64,
+            fileUrl: blob.url,
+            fileSize: selectedFile.size,
             fileName: selectedFile.name,
             fileType: selectedFile.type,
             isFile: true,
             expirationOption,
           }
         } else {
-          payload = {
-            files: selectedFiles.map((f: any) => ({
-              content: f.base64,
+          const filesMeta = []
+          for (const f of selectedFiles) {
+            const blob = await upload(`pastes/${Date.now()}_${f.name}`, f.file, {
+              access: "public",
+              handleUploadUrl: "/api/upload",
+            })
+            filesMeta.push({
+              url: blob.url,
+              size: f.size,
               name: f.name,
               type: f.type,
-            })),
+            })
+          }
+          payload = {
+            files: filesMeta,
             isMultiFile: true,
             expirationOption,
           }
