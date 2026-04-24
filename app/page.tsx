@@ -146,6 +146,8 @@ export default function HomePage() {
           const blob = await upload(`pastes/${Date.now()}_${selectedFile.name}`, selectedFile.file, {
             access: "public",
             handleUploadUrl: "/api/upload",
+            multipart: true,
+            contentType: selectedFile.type || "application/octet-stream",
           })
           payload = {
             fileUrl: blob.url,
@@ -161,6 +163,8 @@ export default function HomePage() {
             const blob = await upload(`pastes/${Date.now()}_${f.name}`, f.file, {
               access: "public",
               handleUploadUrl: "/api/upload",
+              multipart: true,
+              contentType: f.type || "application/octet-stream",
             })
             filesMeta.push({
               url: blob.url,
