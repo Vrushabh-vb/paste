@@ -79,6 +79,7 @@ export default function HomePage() {
   const [generatedShareUrl, setGeneratedShareUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [viewCode, setViewCode] = useState("")
+  const [isRecalling, setIsRecalling] = useState(false)
   const [uploadType, setUploadType] = useState<"text" | "files">("text")
   const [selectedFile, setSelectedFile] = useState<any>(null)
   const [selectedFiles, setSelectedFiles] = useState<any[]>([])
@@ -291,46 +292,52 @@ export default function HomePage() {
     const input = viewCode.trim()
     if (!input) return
 
-    // Full URL pasted — navigate directly (works cross-device)
-    if (input.startsWith('http://') || input.startsWith('https://') || input.startsWith('/view/')) {
-      try {
+    setIsRecalling(true)
+    try {
+      // Full URL pasted — navigate directly (works cross-device)
+      if (input.startsWith('http://') || input.startsWith('https://') || input.startsWith('/view/')) {
         const url = new URL(input, window.location.origin)
-        // Use window.location.href so the hash is preserved exactly
         window.location.href = url.pathname + url.hash
-      } catch {
-        toast.error("Invalid link")
+        return
       }
-      return
-    }
 
-    // 4-digit code: try R2 lookup first (cross-device), then localStorage fallback
-    if (input.match(/^\d{4,5}$/)) {
-      // 1. R2 lookup — works on any device
-      try {
-        const res = await fetch(`/api/code/${input}`)
-        if (res.ok) {
-          const { hash } = await res.json()
-          window.location.href = `/view/${input}#${hash}`
-          return
+      // 4-digit code: try R2 lookup first (cross-device), then localStorage fallback
+      if (input.match(/^\d{4,5}$/)) {
+        // 1. R2 lookup — works on any device
+        try {
+          const res = await fetch(`/api/code/${input}`)
+          console.log('[recall] R2 lookup status:', res.status)
+          if (res.ok) {
+            const { hash } = await res.json()
+            window.location.href = `/view/${input}#${hash}`
+            return
+          }
+        } catch (err) {
+          console.warn('[recall] R2 fetch error:', err)
         }
-      } catch { /* fall through */ }
 
-      // 2. localStorage fallback — same device only
-      try {
-        const stored = localStorage.getItem("shareHistory")
-        const history: Array<{ code: string; url: string }> = stored ? JSON.parse(stored) : []
-        const found = history.find(h => h.code === input)
-        if (found?.url) {
-          window.location.href = found.url
-          return
-        }
-      } catch { /* ignore */ }
+        // 2. localStorage fallback — same device only
+        try {
+          const stored = localStorage.getItem("shareHistory")
+          const history: Array<{ code: string; url: string }> = stored ? JSON.parse(stored) : []
+          const found = history.find(h => h.code === input)
+          if (found?.url) {
+            window.location.href = found.url
+            return
+          }
+        } catch { /* ignore */ }
 
-      toast.error("Code not found or expired")
-      return
+        toast.error("Code not found or expired — please use the full share link")
+        return
+      }
+
+      toast.error("Paste the full share link or enter a 4-digit code")
+    } catch (err) {
+      console.error('[recall] unexpected error:', err)
+      toast.error("Something went wrong — please try again")
+    } finally {
+      setIsRecalling(false)
     }
-
-    toast.error("Paste the full share link or enter a 4-digit code")
   }
 
   return (
@@ -550,11 +557,14 @@ export default function HomePage() {
                         <Button
                           type="submit"
                           size="lg"
-                          className="w-full h-14 px-8 bg-white text-slate-900 hover:bg-slate-100 font-bold rounded-xl shadow-xl shadow-black/20 transition-all duration-300"
+                          disabled={isRecalling}
+                          className="w-full h-14 px-8 bg-white text-slate-900 hover:bg-slate-100 font-bold rounded-xl shadow-xl shadow-black/20 transition-all duration-300 disabled:opacity-60"
                         >
-                          <Search className="h-5 w-5 mr-2" />
-                          Access Content
-                          <ArrowRight className="h-5 w-5 ml-2" />
+                          {isRecalling ? (
+                            <><span className="animate-spin mr-2">⏳</span> Looking up...</>
+                          ) : (
+                            <><Search className="h-5 w-5 mr-2" />Access Content<ArrowRight className="h-5 w-5 ml-2" /></>
+                          )}
                         </Button>
                       </form>
 
