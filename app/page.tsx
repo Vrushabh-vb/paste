@@ -247,6 +247,13 @@ export default function HomePage() {
 
       saveToHistory({ code, url: shareUrl, type: shareType, createdAt: now, expiresAt })
 
+      // Register code→hash in R2 so any device can look it up by code (best-effort)
+      fetch('/api/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, hash: encoded }),
+      }).catch(() => { /* ignore if R2 not configured */ })
+
       setGeneratedCode(code)
       setGeneratedExpiresAt(expiresAt)
       setGeneratedShareUrl(shareUrl)
@@ -271,9 +278,10 @@ export default function HomePage() {
     }
   }
 
-  const handleRecall = (e: React.FormEvent) => {
+  const handleRecall = async (e: React.FormEvent) => {
     e.preventDefault()
     const input = viewCode.trim()
+    if (!input) return
 
     // Full URL pasted — navigate directly (works cross-device)
     if (input.startsWith('http://') || input.startsWith('https://') || input.startsWith('/view/')) {
@@ -286,23 +294,34 @@ export default function HomePage() {
       return
     }
 
-    // Code-only lookup — only works on same device via localStorage
-    if (!input.match(/^\d{4,5}$/)) {
-      toast.error("Enter a 4-digit code or paste the full share link")
+    // 4-digit code: try R2 lookup first (cross-device), then localStorage fallback
+    if (input.match(/^\d{4,5}$/)) {
+      // 1. R2 lookup — works on any device
+      try {
+        const res = await fetch(`/api/code/${input}`)
+        if (res.ok) {
+          const { hash } = await res.json()
+          router.push(`/view/${input}#${hash}`)
+          return
+        }
+      } catch { /* fall through */ }
+
+      // 2. localStorage fallback — same device only
+      try {
+        const stored = localStorage.getItem("shareHistory")
+        const history: Array<{ code: string; url: string }> = stored ? JSON.parse(stored) : []
+        const found = history.find(h => h.code === input)
+        if (found?.url) {
+          router.push(found.url)
+          return
+        }
+      } catch { /* ignore */ }
+
+      toast.error("Code not found or expired")
       return
     }
-    try {
-      const stored = localStorage.getItem("shareHistory")
-      const history: Array<{ code: string; url: string }> = stored ? JSON.parse(stored) : []
-      const found = history.find(h => h.code === input)
-      if (found?.url) {
-        router.push(found.url)
-      } else {
-        toast.error("Code not found on this device — paste the full share link instead")
-      }
-    } catch {
-      toast.error("Could not access history")
-    }
+
+    toast.error("Paste the full share link or enter a 4-digit code")
   }
 
   return (
@@ -509,15 +528,15 @@ export default function HomePage() {
 
                       <div className="text-center mb-8">
                         <h2 className="text-3xl font-black text-white mb-3">Open a Paste</h2>
-                        <p className="text-slate-400 text-lg">Paste a share link, or enter your code (this device only)</p>
+                        <p className="text-slate-400 text-lg">Paste the share link to open on any device</p>
                       </div>
 
                       <form onSubmit={handleRecall} className="space-y-4">
                         <Input
                           value={viewCode}
                           onChange={e => setViewCode(e.target.value)}
-                          placeholder="Paste link or enter 4-digit code"
-                          className="h-14 text-center text-lg font-mono bg-white/[0.06] border-white/10 text-white placeholder:text-slate-600 rounded-xl focus:bg-white/[0.1] focus:border-white/20 transition-all"
+                          placeholder="Paste your share link here"
+                          className="h-14 text-center text-base bg-white/[0.06] border-white/10 text-white placeholder:text-slate-600 rounded-xl focus:bg-white/[0.1] focus:border-white/20 transition-all"
                         />
                         <Button
                           type="submit"
