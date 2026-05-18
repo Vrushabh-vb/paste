@@ -1,10 +1,15 @@
-import { Redis } from '@upstash/redis'
+// Client-side store — no server storage required
+// Paste data is LZ-compressed into the shareable URL hash
+import LZString from 'lz-string'
 
 // ─── Constants ────────────────────────────────────────────
-export const MAX_FILE_SIZE = 500 * 1024 * 1024       // 500MB per file
-export const MAX_TOTAL_FILES_SIZE = 500 * 1024 * 1024 // 500MB total
-export const MAX_FILES = 20
-export const MAX_TEXT_SIZE = 10 * 1024 * 1024          // 10MB for text content
+export const MAX_FILE_SIZE = 1 * 1024 * 1024          // 1MB — inline (URL-hash) threshold
+export const MAX_TOTAL_FILES_SIZE = 5 * 1024 * 1024   // 5MB total inline
+export const MAX_FILES = 10
+export const MAX_TEXT_SIZE = 10 * 1024 * 1024          // 10MB for text
+export const MAX_R2_FILE_SIZE = 100 * 1024 * 1024     // 100MB per file via R2
+export const MAX_R2_TOTAL_SIZE = 500 * 1024 * 1024    // 500MB total via R2
+export const MAX_R2_TTL_SECONDS = 24 * 60 * 60        // R2 files deleted after 24h max
 
 export const EXPIRATION_OPTIONS: Record<string, number> = {
   '5min': 5 * 60,
@@ -18,106 +23,124 @@ export const EXPIRATION_OPTIONS: Record<string, number> = {
   '30days': 30 * 24 * 60 * 60,
 }
 
-export const DEFAULT_TTL_SECONDS = EXPIRATION_OPTIONS['30min'] // 30 minutes
+export const DEFAULT_TTL_SECONDS = EXPIRATION_OPTIONS['30min']
 
 // ─── Type definitions ─────────────────────────────────────
-export interface BlobFileRef {
+export interface InlineFileRef {
   name: string
   type: string
-  url: string        // Vercel Blob URL (public CDN)
+  content: string   // base64 data URL e.g. "data:image/png;base64,..."
   size: number
 }
 
+// For files stored in Cloudflare R2 (large files)
+export interface R2FileRef {
+  name: string
+  type: string
+  url: string       // R2 public URL
+  size: number
+}
+
+// Keep BlobFileRef as alias so file-upload.tsx still compiles
+export type BlobFileRef = InlineFileRef
+
 export interface PasteRecord {
-  content: string
-  createdAt: number
-  expiresAt: number
+  content: string       // text content, base64 data URL (small file), or R2 URL (large single file)
+  createdAt: number     // Unix ms
+  expiresAt: number     // Unix ms
   fileName?: string
   fileType?: string
+  fileSize?: number     // for R2 single-file size display
   isFile?: boolean
-  files?: BlobFileRef[]
+  isR2File?: boolean    // true when content is an R2 URL (not base64)
+  files?: Array<InlineFileRef | R2FileRef>   // multi-file: mix of inline + R2
   isMultiFile?: boolean
   allowEditing?: boolean
-  downloadCount?: number
   isCode?: boolean
 }
 
-// ─── Redis client (lazy singleton) ────────────────────────
-let _redis: Redis | null = null
+// ─── Code generation (sync, no server) ────────────────────
+export function generateCode(): string {
+  return Math.floor(1000 + Math.random() * 9000).toString()
+}
 
-function getRedis(): Redis {
-  if (!_redis) {
-    const url = process.env.UPSTASH_REDIS_REST_URL
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN
+// ─── Encode / Decode (LZ + URL-safe base64) ───────────────
+export function encodePaste(data: PasteRecord): string {
+  return LZString.compressToEncodedURIComponent(JSON.stringify(data))
+}
 
-    if (!url || !token) {
-      throw new Error(
-        'Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN. ' +
-        'Add a Redis integration from Vercel Marketplace or set these env vars.'
-      )
-    }
-    _redis = new Redis({ url, token })
+export function decodePaste(encoded: string): PasteRecord | null {
+  try {
+    const json = LZString.decompressFromEncodedURIComponent(encoded)
+    if (!json) return null
+    return JSON.parse(json) as PasteRecord
+  } catch {
+    return null
   }
-  return _redis
 }
 
-// ─── Key helpers ──────────────────────────────────────────
-function pasteKey(code: string) {
-  return `paste:${code}`
+// ─── localStorage history ─────────────────────────────────
+export interface ShareHistoryItem {
+  code: string
+  url: string           // full path + hash: "/view/1234#<encoded>"
+  type: 'text' | 'file' | 'multi' | 'code'
+  createdAt: number
+  expiresAt: number
 }
 
-// ─── Generate a unique 4-digit code ───────────────────────
-export async function generateCode(): Promise<string> {
-  const redis = getRedis()
-  let attempts = 0
-  const maxAttempts = 50
+const HISTORY_KEY = 'shareHistory'
 
-  while (attempts < maxAttempts) {
-    const code = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
-    const exists = await redis.exists(pasteKey(code))
-    if (!exists) return code
-    attempts++
+export function saveToHistory(item: ShareHistoryItem): void {
+  try {
+    const existing = localStorage.getItem(HISTORY_KEY)
+    const history: ShareHistoryItem[] = existing ? JSON.parse(existing) : []
+    history.push(item)
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+  } catch {
+    // ignore storage errors
   }
-
-  // Fallback: 5-digit code if 4-digit space is crowded
-  const code = Math.floor(Math.random() * 100000).toString().padStart(5, '0')
-  return code
 }
 
-// ─── CRUD operations ─────────────────────────────────────
-export async function savePaste(code: string, data: PasteRecord, ttlSeconds: number): Promise<void> {
-  const redis = getRedis()
-  await redis.set(pasteKey(code), JSON.stringify(data), { ex: ttlSeconds })
+export function getHistory(): ShareHistoryItem[] {
+  try {
+    const stored = localStorage.getItem(HISTORY_KEY)
+    if (!stored) return []
+    return JSON.parse(stored) as ShareHistoryItem[]
+  } catch {
+    return []
+  }
 }
 
-export async function getPaste(code: string): Promise<PasteRecord | null> {
-  const redis = getRedis()
-  const raw = await redis.get<string>(pasteKey(code))
-  if (!raw) return null
-  // Upstash may return parsed JSON or string depending on content
-  if (typeof raw === 'object') return raw as unknown as PasteRecord
-  return JSON.parse(raw)
+export function deleteFromHistory(code: string): void {
+  try {
+    const history = getHistory().filter(h => h.code !== code)
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+  } catch {
+    // ignore
+  }
 }
 
-export async function updatePaste(code: string, data: PasteRecord): Promise<void> {
-  const redis = getRedis()
-  const ttl = await redis.ttl(pasteKey(code))
-  if (ttl <= 0) return
-  await redis.set(pasteKey(code), JSON.stringify(data), { ex: ttl })
-}
-
-export async function deletePaste(code: string): Promise<void> {
-  const redis = getRedis()
-  await redis.del(pasteKey(code))
+export function updateHistoryUrl(code: string, newUrl: string): void {
+  try {
+    const history = getHistory().map(h =>
+      h.code === code ? { ...h, url: newUrl } : h
+    )
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+  } catch {
+    // ignore
+  }
 }
 
 // ─── Formatting helper ───────────────────────────────────
 export function formatExpirationTime(ms: number): string {
-  const minutes = Math.floor(ms / (1000 * 60))
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (days > 0) return `${days} day${days > 1 ? 's' : ''}`
-  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`
-  return `${minutes} minute${minutes > 1 ? 's' : ''}`
+  if (ms <= 0) return 'Expired'
+  const totalSeconds = Math.floor(ms / 1000)
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (days > 0) return `${days}d ${hours}h remaining`
+  if (hours > 0) return `${hours}h ${minutes}m remaining`
+  if (minutes > 0) return `${minutes}m ${seconds}s remaining`
+  return `${seconds}s remaining`
 }

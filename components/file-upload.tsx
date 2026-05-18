@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { FileUp, X, File, Plus, Trash2, CloudUpload, ShieldCheck, CheckCircle2 } from "lucide-react"
-import { MAX_FILE_SIZE, MAX_FILES, MAX_TOTAL_FILES_SIZE } from "@/lib/store"
+import { MAX_FILE_SIZE, MAX_FILES, MAX_TOTAL_FILES_SIZE, MAX_R2_FILE_SIZE, MAX_R2_TOTAL_SIZE } from "@/lib/store"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { motion, AnimatePresence } from "framer-motion"
@@ -13,7 +13,9 @@ import { motion, AnimatePresence } from "framer-motion"
 interface FileData {
   name: string;
   type: string;
-  base64: string;
+  base64?: string;     // set for files <= 1MB (inline URL-hash)
+  rawFile?: File;      // set for files > 1MB (R2 upload)
+  isLarge?: boolean;   // true when rawFile is set
   size: number;
 }
 
@@ -42,15 +44,21 @@ export function FileUpload({
 
   const handleFileChange = async (file: File | null) => {
     if (!file) return
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error(`File size exceeds 500MB limit`)
+    if (file.size > MAX_R2_FILE_SIZE) {
+      toast.error(`File size exceeds 100MB limit`)
       return
     }
     setIsProcessing(true)
     try {
-      const base64 = await convertToBase64(file)
-      onFileSelect({ base64, name: file.name, type: file.type || 'text/plain', size: file.size })
-      toast.success("File processed")
+      if (file.size > MAX_FILE_SIZE) {
+        // Large file — skip base64, pass raw File for R2 upload
+        onFileSelect({ rawFile: file, isLarge: true, name: file.name, type: file.type || 'application/octet-stream', size: file.size })
+        toast.success("File ready (will upload to cloud)")
+      } else {
+        const base64 = await convertToBase64(file)
+        onFileSelect({ base64, name: file.name, type: file.type || 'text/plain', size: file.size })
+        toast.success("File processed")
+      }
     } catch (error) {
       toast.error("Processing failed")
     } finally {
@@ -72,12 +80,20 @@ export function FileUpload({
     try {
       for (let i = 0; i < filesList.length; i++) {
         const file = filesList[i]
-        if (file.size > MAX_FILE_SIZE || currentTotalSize + file.size > MAX_TOTAL_FILES_SIZE) {
-          toast.error(`${file.name} exceeds limits`)
+        if (file.size > MAX_R2_FILE_SIZE) {
+          toast.error(`${file.name} exceeds 100MB limit`)
           continue
         }
-        const base64 = await convertToBase64(file)
-        newFiles.push({ base64, name: file.name, type: file.type || 'text/plain', size: file.size })
+        if (currentTotalSize + file.size > MAX_R2_TOTAL_SIZE) {
+          toast.error(`${file.name} exceeds total size limit`)
+          continue
+        }
+        if (file.size > MAX_FILE_SIZE) {
+          newFiles.push({ rawFile: file, isLarge: true, name: file.name, type: file.type || 'application/octet-stream', size: file.size })
+        } else {
+          const base64 = await convertToBase64(file)
+          newFiles.push({ base64, name: file.name, type: file.type || 'text/plain', size: file.size })
+        }
         currentTotalSize += file.size
       }
       if (newFiles.length > 0) onFilesSelect([...selectedFiles, ...newFiles])

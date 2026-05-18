@@ -29,6 +29,15 @@ import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
+import {
+  generateCode,
+  encodePaste,
+  EXPIRATION_OPTIONS,
+  DEFAULT_TTL_SECONDS,
+  saveToHistory,
+  type PasteRecord,
+  type R2FileRef,
+} from "@/lib/store"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FileUpload } from "@/components/file-upload"
 import Link from "next/link"
@@ -67,6 +76,7 @@ export default function HomePage() {
   const [content, setContent] = useState("")
   const [generatedCode, setGeneratedCode] = useState<string | null>(null)
   const [generatedExpiresAt, setGeneratedExpiresAt] = useState<number | null>(null)
+  const [generatedShareUrl, setGeneratedShareUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [viewCode, setViewCode] = useState("")
   const [uploadType, setUploadType] = useState<"text" | "files">("text")
@@ -123,6 +133,27 @@ export default function HomePage() {
     }
   }
 
+  // Upload a large file directly to R2 via presigned URL
+  const uploadToR2 = async (file: { rawFile: File; name: string; type: string; size: number }, ttlSeconds: number): Promise<string> => {
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size, ttl: ttlSeconds }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || "Failed to get upload URL")
+    }
+    const { uploadUrl, publicUrl } = await res.json()
+    const put = await fetch(uploadUrl, {
+      method: "PUT",
+      body: file.rawFile,
+      headers: { "Content-Type": file.type },
+    })
+    if (!put.ok) throw new Error("Failed to upload file to cloud storage")
+    return publicUrl
+  }
+
   const handleSubmit = async (e?: React.FormEvent, contentOverride?: string) => {
     if (e) e.preventDefault()
     const textToSubmit = contentOverride !== undefined ? contentOverride : content
@@ -136,83 +167,93 @@ export default function HomePage() {
     }
     setIsLoading(true)
     try {
-      let payload: any
+      const ttlSeconds = EXPIRATION_OPTIONS[expirationOption] ?? DEFAULT_TTL_SECONDS
+      const now = Date.now()
+      const expiresAt = now + ttlSeconds * 1000
+
+      let record: PasteRecord
+      let shareType: 'text' | 'file' | 'multi' | 'code'
+
       if (uploadType === "text") {
-        payload = { content: textToSubmit, isFile: false, expirationOption, allowEditing }
+        const isCodeSnippet =
+          textToSubmit.includes("{") ||
+          textToSubmit.includes("}") ||
+          textToSubmit.includes("function") ||
+          textToSubmit.includes("const ") ||
+          textToSubmit.includes("import ") ||
+          textToSubmit.includes("<") ||
+          textToSubmit.includes("=>")
+        shareType = isCodeSnippet ? "code" : "text"
+        record = {
+          content: textToSubmit,
+          createdAt: now,
+          expiresAt,
+          allowEditing,
+          isCode: isCodeSnippet,
+        }
+      } else if (selectedFiles.length > 1 || (selectedFiles.length === 1 && !selectedFile)) {
+        shareType = "multi"
+        // Separate large (R2) from small (inline base64) files
+        const r2Files: R2FileRef[] = []
+        const inlineFiles: Array<{ name: string; type: string; content: string; size: number }> = []
+
+        for (const f of selectedFiles) {
+          if (f.isLarge && f.rawFile) {
+            const url = await uploadToR2({ rawFile: f.rawFile, name: f.name, type: f.type, size: f.size }, ttlSeconds)
+            r2Files.push({ name: f.name, type: f.type, url, size: f.size })
+          } else if (f.base64) {
+            inlineFiles.push({ name: f.name, type: f.type, content: f.base64, size: f.size })
+          }
+        }
+        record = {
+          content: "",
+          createdAt: now,
+          expiresAt,
+          isMultiFile: true,
+          files: [...inlineFiles, ...r2Files],
+        }
       } else {
-        if (selectedFiles.length === 0 && selectedFile) {
-          payload = {
-            content: selectedFile.base64,
-            fileName: selectedFile.name,
-            fileType: selectedFile.type,
+        const file = selectedFile || selectedFiles[0]
+        shareType = "file"
+        if (file.isLarge && file.rawFile) {
+          // Large file → upload to R2, store URL in content
+          const url = await uploadToR2({ rawFile: file.rawFile, name: file.name, type: file.type, size: file.size }, ttlSeconds)
+          record = {
+            content: url,
+            createdAt: now,
+            expiresAt,
             isFile: true,
-            expirationOption,
+            isR2File: true,
+            fileName: file.name,
+            fileType: file.type,
+            fileSize: file.size,
           }
         } else {
-          payload = {
-            files: selectedFiles.map((f: any) => ({
-              content: f.base64,
-              name: f.name,
-              type: f.type,
-            })),
-            isMultiFile: true,
-            expirationOption,
-          }
-        }
-      }
-
-      const response = await fetch("/api/paste", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      if (response.ok) {
-        const { code, expiresAt } = await response.json()
-        setGeneratedCode(code)
-        setGeneratedExpiresAt(expiresAt)
-        setContent("")
-        setSelectedFile(null)
-        setSelectedFiles([])
-
-        try {
-          const isCodeSnippet =
-            uploadType === "text" &&
-            (textToSubmit.includes("{") ||
-              textToSubmit.includes("}") ||
-              textToSubmit.includes("function") ||
-              textToSubmit.includes("const ") ||
-              textToSubmit.includes("import ") ||
-              textToSubmit.includes("<") ||
-              textToSubmit.includes("=>"))
-
-          const shareType =
-            uploadType === "text"
-              ? isCodeSnippet ? "code" : "text"
-              : selectedFiles.length > 1 ? "multi" : "file"
-
-          const historyItem = {
-            code,
-            type: shareType,
-            createdAt: Date.now(),
+          // Small file → base64 inline in URL hash
+          record = {
+            content: file.base64,
+            createdAt: now,
             expiresAt,
+            isFile: true,
+            fileName: file.name,
+            fileType: file.type,
           }
-
-          const existing = localStorage.getItem("shareHistory")
-          const history = existing ? JSON.parse(existing) : []
-          history.push(historyItem)
-          localStorage.setItem("shareHistory", JSON.stringify(history))
-        } catch (error) {
-          console.error("Failed to save history:", error)
         }
-
-        toast.success("Share created successfully!")
-      } else {
-        const errorData = await response.json()
-        toast.error(errorData.error || "Failed to create share", {
-          description: errorData.details,
-        })
       }
+
+      const code = generateCode()
+      const encoded = encodePaste(record)
+      const shareUrl = `/view/${code}#${encoded}`
+
+      saveToHistory({ code, url: shareUrl, type: shareType, createdAt: now, expiresAt })
+
+      setGeneratedCode(code)
+      setGeneratedExpiresAt(expiresAt)
+      setGeneratedShareUrl(shareUrl)
+      setContent("")
+      setSelectedFile(null)
+      setSelectedFiles([])
+      toast.success("Share created successfully!")
     } catch (error) {
       toast.error("An error occurred — please try again")
     } finally {
@@ -232,10 +273,21 @@ export default function HomePage() {
 
   const handleRecall = (e: React.FormEvent) => {
     e.preventDefault()
-    if (viewCode.match(/^\d{4,5}$/)) {
-      router.push(`/view/${viewCode}`)
-    } else {
+    if (!viewCode.match(/^\d{4,5}$/)) {
       toast.error("Enter a valid 4 or 5-digit code")
+      return
+    }
+    try {
+      const stored = localStorage.getItem("shareHistory")
+      const history: Array<{ code: string; url: string }> = stored ? JSON.parse(stored) : []
+      const found = history.find(h => h.code === viewCode)
+      if (found?.url) {
+        router.push(found.url)
+      } else {
+        toast.error("Code not found in your history — use the full share link")
+      }
+    } catch {
+      toast.error("Could not access history")
     }
   }
 
@@ -565,8 +617,8 @@ export default function HomePage() {
                       <Button
                         size="lg"
                         onClick={() => {
-                          if (generatedCode)
-                            copyToClipboard(`${window.location.origin}/view/${generatedCode}`, "Link copied!")
+                          if (generatedShareUrl)
+                            copyToClipboard(`${window.location.origin}${generatedShareUrl}`, "Link copied!")
                         }}
                         className="h-12 px-6 font-semibold bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-lg shadow-blue-600/20 rounded-xl"
                       >
@@ -584,6 +636,7 @@ export default function HomePage() {
                     onClick={() => {
                       setGeneratedCode(null)
                       setGeneratedExpiresAt(null)
+                      setGeneratedShareUrl(null)
                     }}
                     className="font-semibold"
                   >

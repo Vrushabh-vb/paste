@@ -22,6 +22,7 @@ import {
 
 interface ShareHistory {
     code: string
+    url: string
     type: "text" | "file" | "multi" | "code"
     createdAt: number
     expiresAt: number
@@ -41,7 +42,9 @@ export default function RecentPage() {
             const stored = localStorage.getItem("shareHistory")
             if (stored) {
                 const parsed = JSON.parse(stored) as ShareHistory[]
-                const sorted = parsed.sort((a, b) => b.createdAt - a.createdAt)
+                // Only keep entries that have the url field (new format)
+                const valid = parsed.filter(h => !!h.url)
+                const sorted = valid.sort((a, b) => b.createdAt - a.createdAt)
                 setHistory(sorted)
             }
         } catch (error) {
@@ -54,7 +57,6 @@ export default function RecentPage() {
             const updated = history.filter(h => h.code !== code)
             localStorage.setItem("shareHistory", JSON.stringify(updated))
             setHistory(updated)
-            localStorage.removeItem(`paste_${code}`)
             toast.success("Share deleted from history")
         } catch (error) {
             toast.error("Failed to delete share")
@@ -180,7 +182,7 @@ export default function RecentPage() {
                                     >
                                         <Card className={`group border-border/40 bg-card/80 backdrop-blur-xl hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 ${isExpired ? 'opacity-50' : ''}`}>
                                             <CardContent className="p-5 flex items-center justify-between">
-                                                <Link href={`/view/${item.code}`} className="flex items-center gap-4 flex-1">
+                                                <Link href={item.url} className="flex items-center gap-4 flex-1">
                                                     <div className={`h-12 w-12 rounded-2xl bg-gradient-to-br ${getTypeColor(item.type)} flex items-center justify-center text-white group-hover:scale-110 group-hover:shadow-lg transition-all duration-300`}>
                                                         {getTypeIcon(item.type)}
                                                     </div>

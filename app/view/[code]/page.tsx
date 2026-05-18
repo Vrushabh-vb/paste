@@ -24,6 +24,7 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import Footer from "@/components/footer"
+import { decodePaste, encodePaste, formatExpirationTime, updateHistoryUrl, type PasteRecord } from "@/lib/store"
 import { DottedSurface } from "@/components/ui/dotted-surface"
 import {
   Card,
@@ -49,16 +50,17 @@ interface FileData {
 
 interface PasteData {
   content: string
-  createdAt: string
-  expiresAt: string
+  createdAt: number
+  expiresAt: number
   timeRemaining: string
   fileName?: string
   fileType?: string
+  fileSize?: number
   isFile?: boolean
+  isR2File?: boolean
   files?: FileData[]
   isMultiFile?: boolean
   allowEditing?: boolean
-  downloadCount?: number
   isCode?: boolean
 }
 
@@ -88,24 +90,50 @@ export default function ViewPastePage({ params }: { params: { code: string } | P
   useEffect(() => {
     if (!code) return
 
-    const fetchPaste = async () => {
-      try {
-        const response = await fetch(`/api/paste/${code}`)
-        if (response.ok) {
-          const data = await response.json()
-          setPasteData(data)
-          setEditContent(data.content || "")
-        } else {
-          const errData = await response.json().catch(() => ({}))
-          setError(errData.error || "Content not found or expired")
-        }
-      } catch (err) {
-        setError("Network error — please check your connection and try again")
-      } finally {
-        setLoading(false)
-      }
+    const hash = window.location.hash.slice(1)
+    if (!hash) {
+      setError("No paste data found. The share link may be incomplete.")
+      setLoading(false)
+      return
     }
-    fetchPaste()
+
+    const record = decodePaste(hash)
+    if (!record) {
+      setError("Could not decode paste. The link may be corrupted.")
+      setLoading(false)
+      return
+    }
+
+    if (record.expiresAt < Date.now()) {
+      setError("This paste has expired and is no longer available.")
+      setLoading(false)
+      return
+    }
+
+    const timeMs = record.expiresAt - Date.now()
+    setPasteData({
+      content: record.content,
+      createdAt: record.createdAt,
+      expiresAt: record.expiresAt,
+      timeRemaining: formatExpirationTime(timeMs),
+      fileName: record.fileName,
+      fileType: record.fileType,
+      fileSize: record.fileSize,
+      isFile: record.isFile,
+      isR2File: record.isR2File,
+      files: record.files?.map(f => ({
+        name: f.name,
+        type: f.type,
+        // R2FileRef has 'url', InlineFileRef has 'content'
+        url: ('url' in f ? f.url : undefined) || ('content' in f ? f.content : undefined) || '',
+        size: f.size,
+      })),
+      isMultiFile: record.isMultiFile,
+      allowEditing: record.allowEditing,
+      isCode: record.isCode,
+    })
+    setEditContent(record.content || "")
+    setLoading(false)
   }, [code])
 
   const copyToClipboard = async (text?: string) => {
@@ -135,24 +163,25 @@ export default function ViewPastePage({ params }: { params: { code: string } | P
     }
   }
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = () => {
+    if (!pasteData) return
     setIsSaving(true)
     try {
-      const response = await fetch("/api/paste", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, content: editContent }),
-      })
-      if (response.ok) {
-        setPasteData(prev => prev ? { ...prev, content: editContent } : null)
-        setIsEditing(false)
-        toast.success("Updated successfully")
-      } else {
-        const err = await response.json()
-        toast.error(err.error || "Failed to update")
+      const updatedRecord: PasteRecord = {
+        content: editContent,
+        createdAt: pasteData.createdAt,
+        expiresAt: pasteData.expiresAt,
+        allowEditing: pasteData.allowEditing,
+        isCode: pasteData.isCode,
       }
-    } catch (err) {
-      toast.error("Network error while saving")
+      const encoded = encodePaste(updatedRecord)
+      window.location.hash = encoded
+      updateHistoryUrl(code, `/view/${code}#${encoded}`)
+      setPasteData(prev => prev ? { ...prev, content: editContent } : null)
+      setIsEditing(false)
+      toast.success("Updated! Share the new URL from your browser to share the updated content.")
+    } catch {
+      toast.error("Failed to update")
     } finally {
       setIsSaving(false)
     }
@@ -248,7 +277,7 @@ export default function ViewPastePage({ params }: { params: { code: string } | P
     // Single file view
     if (pasteData.isFile) {
       const fileUrl = pasteData.files?.[0]?.url || pasteData.content
-      const fileSize = pasteData.files?.[0]?.size
+      const fileSize = pasteData.files?.[0]?.size || pasteData.fileSize
       return (
         <div className="space-y-8">
           <div className="bg-gradient-to-br from-primary/5 to-primary/10 p-12 rounded-3xl border-2 border-dashed border-primary/10 text-center">
@@ -436,9 +465,6 @@ export default function ViewPastePage({ params }: { params: { code: string } | P
                     <div className="flex gap-3 flex-wrap">
                       <Badge variant="secondary" className="px-3 py-1 font-semibold border-border/40">
                         Shared on {new Date(pasteData!.createdAt).toLocaleDateString()}
-                      </Badge>
-                      <Badge variant="secondary" className="px-3 py-1 font-semibold border-border/40">
-                        <Eye className="h-3 w-3 mr-1.5" /> {pasteData!.downloadCount || 0} Views
                       </Badge>
                     </div>
                   </div>
