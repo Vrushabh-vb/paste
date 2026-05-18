@@ -247,12 +247,20 @@ export default function HomePage() {
 
       saveToHistory({ code, url: shareUrl, type: shareType, createdAt: now, expiresAt })
 
-      // Register code→hash in R2 so any device can look it up by code (best-effort)
-      fetch('/api/code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, hash: encoded }),
-      }).catch(() => { /* ignore if R2 not configured */ })
+      // Register code→hash in R2 so any device can look it up by code
+      try {
+        const regRes = await fetch('/api/code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, hash: encoded }),
+        })
+        if (!regRes.ok) {
+          const err = await regRes.json().catch(() => ({}))
+          console.warn('[code register] failed:', regRes.status, err)
+        }
+      } catch (err) {
+        console.warn('[code register] network error:', err)
+      }
 
       setGeneratedCode(code)
       setGeneratedExpiresAt(expiresAt)

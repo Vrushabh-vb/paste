@@ -1,8 +1,6 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { NextRequest, NextResponse } from 'next/server'
 
-const MAX_HASH_BYTES = 512 * 1024 // 512KB — plenty for any LZ-compressed paste
-
 function getR2Client() {
   const accountId = process.env.R2_ACCOUNT_ID
   const accessKeyId = process.env.R2_ACCESS_KEY_ID
@@ -25,10 +23,6 @@ export async function POST(req: NextRequest) {
 
     if (!code?.match(/^\d{4,5}$/) || typeof hash !== 'string' || !hash) {
       return NextResponse.json({ error: 'Invalid code or hash' }, { status: 400 })
-    }
-
-    if (Buffer.byteLength(hash, 'utf8') > MAX_HASH_BYTES) {
-      return NextResponse.json({ error: 'Hash too large' }, { status: 400 })
     }
 
     const bucket = process.env.R2_BUCKET_NAME
