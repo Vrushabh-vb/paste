@@ -287,7 +287,8 @@ export default function HomePage() {
     if (input.startsWith('http://') || input.startsWith('https://') || input.startsWith('/view/')) {
       try {
         const url = new URL(input, window.location.origin)
-        router.push(url.pathname + url.hash)
+        // Use window.location.href so the hash is preserved exactly
+        window.location.href = url.pathname + url.hash
       } catch {
         toast.error("Invalid link")
       }
@@ -301,7 +302,7 @@ export default function HomePage() {
         const res = await fetch(`/api/code/${input}`)
         if (res.ok) {
           const { hash } = await res.json()
-          router.push(`/view/${input}#${hash}`)
+          window.location.href = `/view/${input}#${hash}`
           return
         }
       } catch { /* fall through */ }
@@ -312,7 +313,7 @@ export default function HomePage() {
         const history: Array<{ code: string; url: string }> = stored ? JSON.parse(stored) : []
         const found = history.find(h => h.code === input)
         if (found?.url) {
-          router.push(found.url)
+          window.location.href = found.url
           return
         }
       } catch { /* ignore */ }
