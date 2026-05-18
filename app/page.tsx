@@ -273,18 +273,32 @@ export default function HomePage() {
 
   const handleRecall = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!viewCode.match(/^\d{4,5}$/)) {
-      toast.error("Enter a valid 4 or 5-digit code")
+    const input = viewCode.trim()
+
+    // Full URL pasted — navigate directly (works cross-device)
+    if (input.startsWith('http://') || input.startsWith('https://') || input.startsWith('/view/')) {
+      try {
+        const url = new URL(input, window.location.origin)
+        router.push(url.pathname + url.hash)
+      } catch {
+        toast.error("Invalid link")
+      }
+      return
+    }
+
+    // Code-only lookup — only works on same device via localStorage
+    if (!input.match(/^\d{4,5}$/)) {
+      toast.error("Enter a 4-digit code or paste the full share link")
       return
     }
     try {
       const stored = localStorage.getItem("shareHistory")
       const history: Array<{ code: string; url: string }> = stored ? JSON.parse(stored) : []
-      const found = history.find(h => h.code === viewCode)
+      const found = history.find(h => h.code === input)
       if (found?.url) {
         router.push(found.url)
       } else {
-        toast.error("Code not found in your history — use the full share link")
+        toast.error("Code not found on this device — paste the full share link instead")
       }
     } catch {
       toast.error("Could not access history")
@@ -494,17 +508,16 @@ export default function HomePage() {
                       </div>
 
                       <div className="text-center mb-8">
-                        <h2 className="text-3xl font-black text-white mb-3">Already Have a Code?</h2>
-                        <p className="text-slate-400 text-lg">Enter your code to access shared content</p>
+                        <h2 className="text-3xl font-black text-white mb-3">Open a Paste</h2>
+                        <p className="text-slate-400 text-lg">Paste a share link, or enter your code (this device only)</p>
                       </div>
 
                       <form onSubmit={handleRecall} className="space-y-4">
                         <Input
                           value={viewCode}
                           onChange={e => setViewCode(e.target.value)}
-                          placeholder="Enter code"
-                          maxLength={5}
-                          className="h-14 text-center text-2xl font-mono tracking-[0.3em] bg-white/[0.06] border-white/10 text-white placeholder:text-slate-600 rounded-xl focus:bg-white/[0.1] focus:border-white/20 transition-all"
+                          placeholder="Paste link or enter 4-digit code"
+                          className="h-14 text-center text-lg font-mono bg-white/[0.06] border-white/10 text-white placeholder:text-slate-600 rounded-xl focus:bg-white/[0.1] focus:border-white/20 transition-all"
                         />
                         <Button
                           type="submit"
