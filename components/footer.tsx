@@ -11,7 +11,7 @@ export default function Footer() {
                 <div className="flex items-center gap-2.5">
                     <div className="h-7 w-7 bg-gradient-to-br from-blue-600 to-violet-600 rounded-lg flex items-center justify-center text-[9px] font-black text-white">PH</div>
                     <span className="text-sm font-semibold text-muted-foreground">
-                        © {new Date().getFullYear()} PasteHere
+                        © {new Date().getFullYear()} PastText
                     </span>
                     <span className="text-muted-foreground/40 text-xs">•</span>
                     <span className="text-xs text-muted-foreground/60 flex items-center gap-1">
