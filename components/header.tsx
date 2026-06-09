@@ -14,7 +14,7 @@ export function Header() {
             <Share2 className="h-6 w-6 text-white" />
           </div>
           <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Paste<span className="text-blue-600">Share</span>
+            Plain<span className="text-blue-600">Text</span>
           </span>
         </Link>
         <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-600 dark:text-slate-400">
