@@ -355,7 +355,7 @@ export default function HomePage() {
                 <div className="absolute inset-0 rounded-xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <span className="font-bold text-xl tracking-tight">
-                Paste<span className="bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">Here</span>
+                Plain<span className="bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">Text</span>
               </span>
             </Link>
             <div className="flex items-center gap-2">
