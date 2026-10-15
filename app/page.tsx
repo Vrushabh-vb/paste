@@ -30,9 +30,9 @@ export default function HomePage() {
               <span className="h-1.5 w-1.5 rounded-full bg-gold-soft" aria-hidden />
               Free · No sign-up · Deletes itself
             </p>
-            <h1 className="font-serif text-[2.6rem] leading-[1.05] tracking-tight sm:text-5xl lg:text-[3.5rem]">
+            <h1 className="text-[2.5rem] leading-[1.05] tracking-[-0.04em] sm:text-5xl lg:text-[3.75rem]">
               Share anything,
-              <br className="sm:hidden" /> <span className="italic text-gold">in seconds.</span>
+              <br className="sm:hidden" /> <span className="bg-gradient-to-r from-gold to-gold-soft bg-clip-text text-transparent">in seconds.</span>
             </h1>
             <p className="mx-auto mt-4 max-w-xl text-balance text-base leading-relaxed text-muted-foreground">
               Paste text or code, or drop images, video and zips. Open it on any device with a {CODE_LENGTH}-digit code.
@@ -52,7 +52,7 @@ export default function HomePage() {
             <ol className="mt-8 grid gap-8 sm:grid-cols-3 sm:gap-6">
               {STEPS.map(step => (
                 <li key={step.n} className="border-t border-border pt-5">
-                  <span className="font-serif text-3xl italic text-gold">{step.n}</span>
+                  <span className="text-2xl font-semibold tabular tracking-tight text-gold">{step.n}</span>
                   <h3 className="mt-2 text-base font-medium">{step.title}</h3>
                   <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{step.body}</p>
                 </li>

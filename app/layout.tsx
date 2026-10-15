@@ -1,26 +1,21 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google"
+import { Geist_Mono, Inter } from "next/font/google"
 import "./globals.css"
 import { Providers } from "./providers"
 import { BackgroundFX } from "@/components/background-fx"
 import { cn } from "@/lib/utils"
 
-const fontSans = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" })
+// Apple-style typography. Apple devices render their own San Francisco (see tailwind.config.ts); everyone else gets Inter,
+// the open-source face designed to sit closest to it. "opsz" lets Inter switch to its tighter Display cut at large sizes.
+const fontInter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap", axes: ["opsz"] })
 const fontMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" })
-const fontSerif = Instrument_Serif({
-  subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
-  variable: "--font-serif",
-  display: "swap",
-})
 
 export const metadata: Metadata = {
-  title: { default: "PasteHere: share text and files instantly", template: "%s · PasteHere" },
+  title: { default: "PlainText: share text and files instantly", template: "%s · PlainText" },
   description:
     "Free, no sign-up sharing for text, code, images, video and zips. Open it anywhere with a 6-digit code. Deleted automatically.",
-  applicationName: "PasteHere",
+  applicationName: "PlainText",
 }
 
 export const viewport: Viewport = {
@@ -35,7 +30,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={cn("min-h-screen font-sans", fontSans.variable, fontMono.variable, fontSerif.variable)}>
+      <body className={cn("min-h-screen font-sans", fontInter.variable, fontMono.variable)}>
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"

@@ -180,7 +180,7 @@ export default function ViewPage({ params }: { params: { code: string } | Promis
     const url = URL.createObjectURL(new Blob([data.text], { type: "text/plain;charset=utf-8" }))
     const a = document.createElement("a")
     a.href = url
-    a.download = `pastehere-${data.code}.txt`
+    a.download = `plaintext-${data.code}.txt`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -219,7 +219,7 @@ export default function ViewPage({ params }: { params: { code: string } | Promis
                   <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-gold">
                     <Icon className="h-6 w-6" strokeWidth={1.5} aria-hidden />
                   </span>
-                  <h1 className="mt-6 font-serif text-4xl leading-tight">{p.title}</h1>
+                  <h1 className="mt-6 text-3xl leading-tight">{p.title}</h1>
                   <p className="mt-3 text-balance text-muted-foreground">{p.message}</p>
                   <Button asChild size="lg" className="mt-8">
                     <Link href="/">Share something new</Link>

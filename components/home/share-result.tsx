@@ -29,7 +29,7 @@ export function ShareResult({ created, onReset }: { created: CreatedShare; onRes
   }, [])
 
   const nativeShare = () => {
-    navigator.share({ title: "PasteHere", url: link }).catch(() => {
+    navigator.share({ title: "PlainText", url: link }).catch(() => {
       /* user dismissed the share sheet */
     })
   }
@@ -41,7 +41,7 @@ export function ShareResult({ created, onReset }: { created: CreatedShare; onRes
           <Check className="h-4 w-4" aria-hidden />
         </span>
         <div>
-          <h2 ref={headingRef} id="result-title" tabIndex={-1} className="font-serif text-2xl leading-none outline-none">Your share is ready</h2>
+          <h2 ref={headingRef} id="result-title" tabIndex={-1} className="text-xl leading-none outline-none">Your share is ready</h2>
           <p className="mt-1 text-sm text-muted-foreground">Anyone with the code or the link can open it.</p>
         </div>
       </div>

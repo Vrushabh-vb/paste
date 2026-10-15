@@ -57,7 +57,7 @@ export function ReceiveCard({ className, refreshKey }: { className?: string; ref
       } catch {
         /* fall through to the error */
       }
-      setError("That doesn't look like a PasteHere link.")
+      setError("That doesn't look like a PlainText link.")
       return
     }
 
@@ -85,7 +85,7 @@ export function ReceiveCard({ className, refreshKey }: { className?: string; ref
   return (
     <section aria-labelledby="receive-title" className={cn("surface p-5 sm:p-6", className)}>
       <p className="eyebrow">Receive</p>
-      <h2 id="receive-title" className="mt-2 font-serif text-3xl leading-tight">Have a code?</h2>
+      <h2 id="receive-title" className="mt-2 text-2xl leading-tight">Have a code?</h2>
       <p className="mt-2 hidden text-sm leading-relaxed text-muted-foreground lg:block">
         Type the {CODE_LENGTH}-digit code from the other device, or paste a link.
       </p>

@@ -1,4 +1,4 @@
-# PasteHere
+# PlainText
 
 Free, no-account sharing of text, code, images, video, zips and any other file. Share by a 6-digit code, a link or a QR code.
 Runs on Vercel (Hobby) + Cloudflare R2 free tier, with no database.
@@ -48,7 +48,7 @@ Cloudflare dashboard → R2 Object Storage → **Create bucket**:
 
 | Field | Value |
 |---|---|
-| Bucket name | anything, e.g. `pastehere` (permanent) |
+| Bucket name | anything, e.g. `plaintext` (permanent) |
 | Location | **Automatic** (a location hint can only be set now, never later) |
 | Default storage class | **Standard**. Do not pick *Infrequent Access*: it has no free tier and bills a 30-day minimum per object. |
 
@@ -123,7 +123,11 @@ BASE_URL=http://localhost:3100 npm run e2e   # real R2: presign, upload, downloa
 `npm run e2e` only creates short-lived data; the cleanup cron removes it.
 
 Design tokens (the "Ivory & Ink" light and "Obsidian & Champagne" dark palettes) live in `app/globals.css`;
-fonts are Instrument Serif (display), Geist (UI) and Geist Mono (codes), loaded in `app/layout.tsx`.
+typography is Apple-style: real San Francisco on Apple devices (system font stack in `tailwind.config.ts`), Inter everywhere else (loaded in `app/layout.tsx`), and SF Mono / Geist Mono for codes. San Francisco itself cannot be bundled, because Apple licenses it for Apple platforms only.
+
+The animated background (`components/background-fx.tsx`) is drifting glows, a creeping dot grid, film grain and a desktop cursor
+light. Only `transform` is animated (GPU, no main-thread work, no WebGL), and everything holds still under
+`prefers-reduced-motion`. To tone it down, lower the `--aura-*` alphas in `globals.css`; to remove it, delete `<BackgroundFX />` from `app/layout.tsx`.
 
 ## Staying free
 

@@ -8,7 +8,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage title="Privacy" updated="October 2026">
       <p>
-        PasteHere is a no-account sharing tool. This page explains, in plain language, what happens to what you share.
+        PlainText is a no-account sharing tool. This page explains, in plain language, what happens to what you share.
       </p>
 
       <h2>What we store</h2>

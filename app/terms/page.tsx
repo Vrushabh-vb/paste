@@ -6,11 +6,11 @@ export const metadata: Metadata = { title: "Terms" }
 export default function TermsPage() {
   return (
     <LegalPage title="Terms of use" updated="October 2026">
-      <p>By using PasteHere you agree to these terms. They are short on purpose.</p>
+      <p>By using PlainText you agree to these terms. They are short on purpose.</p>
 
       <h2>The service</h2>
       <p>
-        PasteHere is free and provided as is, without guarantees. It may be slow, limited or unavailable at times, and it
+        PlainText is free and provided as is, without guarantees. It may be slow, limited or unavailable at times, and it
         may change or stop at any point. Don&apos;t rely on it as the only copy of anything important: shares are deleted
         automatically.
       </p>

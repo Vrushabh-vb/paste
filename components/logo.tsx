@@ -14,10 +14,10 @@ export function LogoMark({ className }: { className?: string }) {
 
 export function Logo({ className }: { className?: string }) {
   return (
-    <Link href="/" className={cn("group inline-flex items-center gap-2.5", className)} aria-label="PasteHere home">
+    <Link href="/" className={cn("group inline-flex items-center gap-2.5", className)} aria-label="PlainText home">
       <LogoMark className="transition-transform duration-300 group-hover:-rotate-6" />
-      <span className="font-serif text-[22px] leading-none tracking-tight">
-        Paste<span className="italic text-gold">Here</span>
+      <span className="text-[19px] font-semibold leading-none tracking-[-0.03em]">
+        Plain<span className="text-gold">Text</span>
       </span>
     </Link>
   )

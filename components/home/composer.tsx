@@ -217,7 +217,7 @@ export function Composer({ onCreated }: { onCreated: (created: CreatedShare) => 
         >
           <div className="flex h-full max-h-[28rem] w-full max-w-3xl flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-gold-soft bg-card/90 shadow-2xl">
             <CloudUpload className="h-10 w-10 text-gold" />
-            <p className="font-serif text-3xl">Drop to share</p>
+            <p className="text-2xl font-semibold tracking-tight">Drop to share</p>
             <p className="text-sm text-muted-foreground">Release anywhere on the page</p>
           </div>
         </div>

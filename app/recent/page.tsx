@@ -53,7 +53,7 @@ export default function RecentPage() {
 
       <main id="main" className="mx-auto w-full max-w-3xl flex-1 px-4 pb-20 pt-10 sm:px-6 sm:pt-14">
         <p className="eyebrow">History</p>
-        <h1 className="mt-2 font-serif text-4xl leading-tight sm:text-5xl">Recent shares</h1>
+        <h1 className="mt-2 text-3xl leading-tight sm:text-4xl">Recent shares</h1>
         <p className="mt-3 max-w-xl text-balance text-muted-foreground">
           Only you can see this list: it lives in this browser, not on our servers. Shares delete themselves when their timer ends.
         </p>
@@ -63,7 +63,7 @@ export default function RecentPage() {
             <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-gold">
               <History className="h-6 w-6" strokeWidth={1.5} aria-hidden />
             </span>
-            <h2 className="mt-5 font-serif text-2xl">Nothing here yet</h2>
+            <h2 className="mt-5 text-xl">Nothing here yet</h2>
             <p className="mt-2 text-sm text-muted-foreground">Shares you create on this device will show up here.</p>
             <Button asChild className="mt-6">
               <Link href="/">Create a share</Link>

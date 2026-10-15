@@ -6,9 +6,23 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        serif: ["var(--font-serif)", "ui-serif", "Georgia", "serif"],
-        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        // -apple-system / BlinkMacSystemFont resolve to San Francisco (Text or Display, chosen by size) on Apple devices.
+        // Elsewhere "var(--font-inter)" (Inter, loaded in app/layout.tsx) takes over, so the look stays consistent.
+        sans: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "SF Pro Text",
+          "SF Pro Display",
+          "var(--font-inter)",
+          "Inter",
+          "system-ui",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica Neue",
+          "Arial",
+          "sans-serif",
+        ],
+        mono: ["ui-monospace", "SF Mono", "SFMono-Regular", "var(--font-mono)", "Menlo", "Consolas", "monospace"],
       },
       colors: {
         background: "hsl(var(--background))",

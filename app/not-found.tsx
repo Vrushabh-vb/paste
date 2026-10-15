@@ -12,10 +12,10 @@ export default function NotFound() {
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-gold">
           <FileQuestion className="h-6 w-6" strokeWidth={1.5} aria-hidden />
         </span>
-        <h1 className="mt-6 font-serif text-4xl">Page not found</h1>
+        <h1 className="mt-6 text-3xl">Page not found</h1>
         <p className="mt-3 text-muted-foreground">The page you were looking for doesn&apos;t exist.</p>
         <Button asChild size="lg" className="mt-8">
-          <Link href="/">Back to PasteHere</Link>
+          <Link href="/">Back to PlainText</Link>
         </Button>
       </main>
       <SiteFooter />
