@@ -1,496 +1,358 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Copy,
-  Check,
-  Download,
-  FileIcon,
-  Edit3,
-  Save,
-  X,
-  Eye,
-  AlertCircle,
-  ChevronLeft,
-  Clock,
-  ShieldCheck,
-  Code,
-  ExternalLink,
-  Zap,
-} from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { Download, FileQuestion, Link2, Pencil, ShieldAlert, TimerOff, WrapText, X, Save } from "lucide-react"
 import { toast } from "sonner"
-import { motion, AnimatePresence } from "framer-motion"
-import Footer from "@/components/footer"
-import { decodePaste, encodePaste, formatExpirationTime, updateHistoryUrl, type PasteRecord } from "@/lib/store"
-import { DottedSurface } from "@/components/ui/dotted-surface"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Textarea } from "@/components/ui/textarea"
+import { CopyButton } from "@/components/copy-button"
+import { ExpiryMeter } from "@/components/countdown"
+import { FileIcon } from "@/components/file-icon"
+import { SiteFooter } from "@/components/site-footer"
+import { SiteHeader } from "@/components/site-header"
+import { getShare, updateShareText } from "@/lib/client-api"
+import { formatBytes, formatCode, formatFileSize, utf8Length } from "@/lib/format"
+import { decodeLegacyPaste } from "@/lib/store"
+import { cn } from "@/lib/utils"
 
-interface FileData {
+interface ViewFile {
   name: string
   type: string
-  url: string
   size: number
-  content?: string
+  url: string
+  preview: "image" | "video" | "audio" | null
+  legacy?: boolean // pre-v2 file: url is a data: URL or a public R2 URL
 }
 
-interface PasteData {
-  content: string
+interface ViewData {
+  source: "server" | "legacy"
+  ref: string // what the API is called with (the share id)
+  code: string
+  text: string
+  files: ViewFile[]
   createdAt: number
   expiresAt: number
-  timeRemaining: string
-  fileName?: string
-  fileType?: string
-  fileSize?: number
-  isFile?: boolean
-  isR2File?: boolean
-  files?: FileData[]
-  isMultiFile?: boolean
-  allowEditing?: boolean
-  isCode?: boolean
+  allowEditing: boolean
+  isCode: boolean
 }
 
-export default function ViewPastePage({ params }: { params: { code: string } | Promise<{ code: string }> }) {
-  const [code, setCode] = useState<string>("")
-  const [pasteData, setPasteData] = useState<PasteData | null>(null)
+type Problem = { icon: typeof FileQuestion; title: string; message: string }
+
+const PROBLEMS = {
+  notFound: { icon: FileQuestion, title: "Nothing here", message: "This share doesn't exist, or it has already expired and been deleted." },
+  expired: { icon: TimerOff, title: "This share has expired", message: "It was deleted automatically when its timer ran out." },
+  tooMany: { icon: ShieldAlert, title: "Slow down a little", message: "Too many attempts from your connection. Please wait a minute and try again." },
+  broken: { icon: FileQuestion, title: "Link looks incomplete", message: "We couldn't read this link. Ask the sender to share it again." },
+} satisfies Record<string, Problem>
+
+const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" })
+
+// `params` is a Promise in Next 15+, a plain object in older versions.
+export default function ViewPage({ params }: { params: { code: string } | Promise<{ code: string }> }) {
+  // The URL segment is either the unguessable share id (from a link) or the 6-digit code.
+  const [segment, setSegment] = useState("")
+  const [hashKey, setHashKey] = useState(0)
+  const [data, setData] = useState<ViewData | null>(null)
+  const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [wrap, setWrap] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    const resolveParams = async () => {
-      try {
-        const resolvedParams = await Promise.resolve(params)
-        setCode(resolvedParams.code)
-      } catch (err) {
-        setError("Invalid parameters")
+    Promise.resolve(params).then(
+      p => setSegment(p.code),
+      () => {
+        setProblem(PROBLEMS.broken)
         setLoading(false)
-      }
-    }
-    resolveParams()
+      },
+    )
   }, [params])
 
+  // Pre-v2 links differ only by their #hash; the browser doesn't reload for that, so watch for it.
   useEffect(() => {
-    if (!code) return
+    const onHashChange = () => setHashKey(k => k + 1)
+    window.addEventListener("hashchange", onHashChange)
+    return () => window.removeEventListener("hashchange", onHashChange)
+  }, [])
 
+  useEffect(() => {
+    if (!segment) return
+    let cancelled = false
+    setProblem(null)
+    setData(null)
+    setIsEditing(false)
+    setLoading(true)
+
+    // Pre-v2 links carry their content in the #hash and never touch the server.
     const hash = window.location.hash.slice(1)
-    if (!hash) {
-      setError("No paste data found. The share link may be incomplete.")
-      setLoading(false)
-      return
-    }
-
-    const record = decodePaste(hash)
-    if (!record) {
-      setError("Could not decode paste. The link may be corrupted.")
-      setLoading(false)
-      return
-    }
-
-    if (record.expiresAt < Date.now()) {
-      setError("This paste has expired and is no longer available.")
-      setLoading(false)
-      return
-    }
-
-    const timeMs = record.expiresAt - Date.now()
-    setPasteData({
-      content: record.content,
-      createdAt: record.createdAt,
-      expiresAt: record.expiresAt,
-      timeRemaining: formatExpirationTime(timeMs),
-      fileName: record.fileName,
-      fileType: record.fileType,
-      fileSize: record.fileSize,
-      isFile: record.isFile,
-      isR2File: record.isR2File,
-      files: record.files?.map(f => ({
-        name: f.name,
-        type: f.type,
-        // R2FileRef has 'url', InlineFileRef has 'content'
-        url: ('url' in f ? f.url : undefined) || ('content' in f ? f.content : undefined) || '',
-        size: f.size,
-      })),
-      isMultiFile: record.isMultiFile,
-      allowEditing: record.allowEditing,
-      isCode: record.isCode,
-    })
-    setEditContent(record.content || "")
-    setLoading(false)
-  }, [code])
-
-  const copyToClipboard = async (text?: string) => {
-    const contentToCopy = text || pasteData?.content
-    if (!contentToCopy) return
-    try {
-      await navigator.clipboard.writeText(contentToCopy)
-      setCopied(true)
-      toast.success("Copied to clipboard")
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      const textArea = document.createElement("textarea")
-      textArea.value = contentToCopy
-      textArea.style.position = "fixed"
-      textArea.style.left = "-999999px"
-      document.body.appendChild(textArea)
-      textArea.select()
-      try {
-        document.execCommand("copy")
-        setCopied(true)
-        toast.success("Copied to clipboard")
-        setTimeout(() => setCopied(false), 2000)
-      } catch {
-        toast.error("Copy failed — please select and copy manually")
+    if (hash) {
+      const record = decodeLegacyPaste(hash)
+      if (!record) setProblem(PROBLEMS.broken)
+      else if (record.expiresAt < Date.now()) setProblem(PROBLEMS.expired)
+      else {
+        const files: ViewFile[] = (record.files ?? []).map(f => ({
+          name: f.name, type: f.type, size: f.size, url: f.url || f.content || "", preview: null, legacy: true,
+        }))
+        if (record.isFile && files.length === 0) {
+          files.push({ name: record.fileName ?? "file", type: record.fileType ?? "", size: record.fileSize ?? 0, url: record.content, preview: null, legacy: true })
+        }
+        setData({
+          source: "legacy", ref: segment, code: segment, text: files.length ? "" : record.content, files,
+          createdAt: record.createdAt, expiresAt: record.expiresAt, allowEditing: false, isCode: !!record.isCode,
+        })
       }
-      document.body.removeChild(textArea)
+      setLoading(false)
+      return
     }
-  }
 
-  const handleSaveEdit = () => {
-    if (!pasteData) return
+    getShare(segment)
+      .then(s => {
+        if (cancelled) return
+        setData({
+          source: "server", ref: s.id, code: s.code, text: s.text ?? "", files: s.files ?? [],
+          createdAt: s.createdAt, expiresAt: s.expiresAt, allowEditing: s.allowEditing, isCode: s.isCode,
+        })
+        setEditContent(s.text ?? "")
+      })
+      .catch((err: Error & { status?: number }) => {
+        if (cancelled) return
+        if (err.status === 404) setProblem(PROBLEMS.notFound)
+        else if (err.status === 429) setProblem(PROBLEMS.tooMany)
+        else setProblem({ icon: FileQuestion, title: "Couldn't load this share", message: err.message })
+      })
+      .finally(() => !cancelled && setLoading(false))
+
+    return () => {
+      cancelled = true
+    }
+  }, [segment, hashKey])
+
+  // Remove the content from the screen the moment the share expires.
+  const expiresAt = data?.expiresAt
+  useEffect(() => {
+    if (!expiresAt) return
+    const ms = expiresAt - Date.now()
+    const expire = () => {
+      setData(null)
+      setProblem(PROBLEMS.expired)
+    }
+    if (ms <= 0) return expire()
+    const t = setTimeout(expire, Math.min(ms, 2 ** 31 - 1))
+    return () => clearTimeout(t)
+  }, [expiresAt])
+
+  const saveEdit = async () => {
+    if (!data) return
     setIsSaving(true)
     try {
-      const updatedRecord: PasteRecord = {
-        content: editContent,
-        createdAt: pasteData.createdAt,
-        expiresAt: pasteData.expiresAt,
-        allowEditing: pasteData.allowEditing,
-        isCode: pasteData.isCode,
-      }
-      const encoded = encodePaste(updatedRecord)
-      window.location.hash = encoded
-      updateHistoryUrl(code, `/view/${code}#${encoded}`)
-      setPasteData(prev => prev ? { ...prev, content: editContent } : null)
+      const updated = await updateShareText(data.ref, editContent)
+      setData({ ...data, text: updated.text ?? editContent })
       setIsEditing(false)
-      toast.success("Updated! Share the new URL from your browser to share the updated content.")
-    } catch {
-      toast.error("Failed to update")
+      toast.success("Saved. Everyone with the link now sees this version.")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save your changes")
     } finally {
       setIsSaving(false)
     }
   }
 
-  const downloadFile = (url: string, fileName: string) => {
-    const link = document.createElement("a")
-    link.href = url
-    link.download = fileName
-    link.target = "_blank"
-    link.rel = "noopener noreferrer"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  const downloadFile = useCallback((file: ViewFile) => {
+    const a = document.createElement("a")
+    a.download = file.name
+    if (file.legacy) {
+      a.href = file.url
+      a.target = "_blank"
+      a.rel = "noopener noreferrer"
+    } else {
+      a.href = `${file.url}?dl=1` // server answers with a short-lived signed link + attachment headers
+    }
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }, [])
+
+  const saveText = () => {
+    if (!data) return
+    const url = URL.createObjectURL(new Blob([data.text], { type: "text/plain;charset=utf-8" }))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `pastehere-${data.code}.txt`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
   }
 
-  const formatFileSize = (bytes: number): string => {
-    if (!bytes || bytes === 0) return "Unknown"
-    if (bytes < 1024) return bytes + " B"
-    const units = ["KB", "MB", "GB"]
-    let size = bytes / 1024
-    let unitIndex = 0
-    while (size > 1024 && unitIndex < units.length - 1) {
-      size /= 1024
-      unitIndex++
-    }
-    return size.toFixed(1) + " " + units[unitIndex]
-  }
-
-  const renderContent = () => {
-    if (!pasteData) return null
-
-    // Multi-file view
-    if (pasteData.isMultiFile && pasteData.files && pasteData.files.length > 0) {
-      return (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-widest">
-              Shared Files ({pasteData.files.length})
-            </h3>
-            <Button
-              onClick={() =>
-                pasteData.files?.forEach((f, i) =>
-                  setTimeout(() => downloadFile(f.url || f.content || "", f.name), i * 300)
-                )
-              }
-              variant="outline"
-              size="sm"
-              className="h-9 rounded-xl font-bold text-xs"
-            >
-              <Download className="h-3.5 w-3.5 mr-2" />
-              Download All
-            </Button>
-          </div>
-          {pasteData.files.map((file, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className="p-4 rounded-2xl border border-border/40 bg-card/80 backdrop-blur-sm flex items-center justify-between hover:border-primary/30 hover:shadow-sm transition-all group"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="h-10 w-10 rounded-xl bg-muted/60 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
-                  <FileIcon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold truncate max-w-[250px]">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {file.type || "Binary"} • {formatFileSize(file.size)}
-                  </p>
-                </div>
-              </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => downloadFile(file.url || file.content || "", file.name)}
-                    className="h-9 w-9 rounded-xl opacity-60 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Download</TooltipContent>
-              </Tooltip>
-            </motion.div>
-          ))}
-        </div>
-      )
-    }
-
-    // Single file view
-    if (pasteData.isFile) {
-      const fileUrl = pasteData.files?.[0]?.url || pasteData.content
-      const fileSize = pasteData.files?.[0]?.size || pasteData.fileSize
-      return (
-        <div className="space-y-8">
-          <div className="bg-gradient-to-br from-primary/5 to-primary/10 p-12 rounded-3xl border-2 border-dashed border-primary/10 text-center">
-            <div className="h-16 w-16 bg-card rounded-2xl shadow-xl border border-border/40 flex items-center justify-center mx-auto mb-6">
-              <FileIcon className="h-8 w-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-black mb-2">{pasteData.fileName}</h2>
-            <p className="text-muted-foreground text-sm mb-2 uppercase tracking-widest font-bold">
-              {pasteData.fileType}
-            </p>
-            {fileSize && (
-              <p className="text-muted-foreground text-sm mb-8">{formatFileSize(fileSize)}</p>
-            )}
-            <Button
-              onClick={() => downloadFile(fileUrl, pasteData.fileName!)}
-              className="h-14 px-10 rounded-2xl font-black bg-gradient-to-r from-blue-600 to-violet-600 shadow-xl shadow-blue-600/20"
-            >
-              <Download className="h-5 w-5 mr-2" />
-              Download File
-            </Button>
-          </div>
-        </div>
-      )
-    }
-
-    // Editing mode
-    if (isEditing) {
-      return (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center bg-muted/40 p-3 rounded-2xl border border-border/40">
-            <span className="text-xs font-bold px-4 text-muted-foreground uppercase tracking-widest">
-              Editing Snippet
-            </span>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => setIsEditing(false)}
-                variant="ghost"
-                size="sm"
-                className="rounded-xl font-bold"
-              >
-                <X className="h-3.5 w-3.5 mr-1.5" />
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveEdit}
-                size="sm"
-                className="rounded-xl font-bold bg-gradient-to-r from-blue-600 to-violet-600 px-6"
-                disabled={isSaving}
-              >
-                {isSaving ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </div>
-          <Textarea
-            value={editContent}
-            onChange={e => setEditContent(e.target.value)}
-            className="min-h-[500px] p-8 rounded-2xl border-border/40 focus-visible:ring-0 text-[15px] font-mono leading-relaxed bg-muted/20"
-          />
-        </div>
-      )
-    }
-
-    // Text content view
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center border-b border-border/40 pb-6">
-          <div className="flex items-center gap-2.5">
-            <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]" />
-            <span className="text-xs font-black text-muted-foreground uppercase tracking-[0.2em]">
-              {pasteData.isCode ? "Code Snippet" : "Shared Content"}
-            </span>
-            {pasteData.isCode && <Code className="h-3.5 w-3.5 text-blue-500" />}
-          </div>
-          <div className="flex gap-2">
-            {pasteData.allowEditing && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={() => setIsEditing(true)}
-                    variant="outline"
-                    size="sm"
-                    className="h-9 rounded-xl font-bold border-border/40"
-                  >
-                    <Edit3 className="h-3.5 w-3.5 mr-2" />
-                    Edit
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Edit this content</TooltipContent>
-              </Tooltip>
-            )}
-            <Button
-              onClick={() => copyToClipboard()}
-              variant="outline"
-              size="sm"
-              className="h-9 rounded-xl font-bold border-border/40"
-            >
-              {copied ? (
-                <Check className="h-3.5 w-3.5 mr-2 text-emerald-500" />
-              ) : (
-                <Copy className="h-3.5 w-3.5 mr-2" />
-              )}
-              Copy Content
-            </Button>
-          </div>
-        </div>
-        <div className="relative group">
-          <Textarea
-            value={pasteData.content}
-            readOnly
-            className="min-h-[500px] p-0 border-none focus-visible:ring-0 text-lg font-medium leading-relaxed bg-transparent resize-none font-mono"
-          />
-        </div>
-      </div>
-    )
-  }
+  const isFiles = !!data && data.files.length > 0
+  const kindLabel = !data ? "" : isFiles ? (data.files.length === 1 ? "Shared file" : `${data.files.length} shared files`) : data.isCode ? "Shared code" : "Shared text"
+  const totalSize = data?.files.reduce((s, f) => s + f.size, 0) ?? 0
+  const lineCount = data && !isFiles ? data.text.split("\n").length : 0
 
   return (
-    <TooltipProvider>
-      <div className="relative min-h-screen flex flex-col overflow-hidden">
-        {/* Three.js Background */}
-        <DottedSurface className="opacity-30" />
+    <div className="flex min-h-screen flex-col">
+      <SiteHeader />
 
-        <nav className="sticky top-0 z-50 border-b border-border/40 bg-background/60 backdrop-blur-2xl backdrop-saturate-150 h-14 flex items-center justify-center">
-          <div className="w-full max-w-5xl px-6 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2 group">
-              <ChevronLeft className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:-translate-x-0.5 transition-all" />
-              <div className="h-6 w-6 bg-gradient-to-br from-blue-600 to-violet-600 rounded-md flex items-center justify-center">
-                <Zap className="h-3.5 w-3.5 text-white fill-white" />
+      <main id="main" className="mx-auto w-full max-w-4xl flex-1 px-4 pb-20 pt-8 sm:px-6 sm:pt-12">
+        {loading ? (
+          <div className="space-y-8" role="status" aria-label="Loading share">
+            <div className="flex items-end justify-between gap-6">
+              <div className="space-y-3">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-12 w-56" />
+                <Skeleton className="h-4 w-40" />
               </div>
-              <span className="font-bold tracking-tight text-sm">Dashboard</span>
-            </Link>
-            <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-widest bg-primary/5 border-primary/10 text-primary">
-              <ShieldCheck className="h-3 w-3 mr-1.5" /> Secure Recall
-            </Badge>
+              <Skeleton className="hidden h-10 w-44 sm:block" />
+            </div>
+            <Skeleton className="h-72 w-full rounded-2xl" />
           </div>
-        </nav>
-
-        <main className="relative z-10 flex-grow pt-16 pb-20 px-6">
-          <div className="max-w-4xl mx-auto">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center h-[50vh]">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  className="h-10 w-10 border-4 border-primary/20 border-t-primary rounded-full"
-                />
-                <p className="mt-4 text-sm text-muted-foreground font-medium">Fetching content...</p>
+        ) : problem || !data ? (
+          <div className="mx-auto max-w-md animate-fade-up py-16 text-center sm:py-24">
+            {(() => {
+              const p = problem ?? PROBLEMS.notFound
+              const Icon = p.icon
+              return (
+                <>
+                  <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-gold">
+                    <Icon className="h-6 w-6" strokeWidth={1.5} aria-hidden />
+                  </span>
+                  <h1 className="mt-6 font-serif text-4xl leading-tight">{p.title}</h1>
+                  <p className="mt-3 text-balance text-muted-foreground">{p.message}</p>
+                  <Button asChild size="lg" className="mt-8">
+                    <Link href="/">Share something new</Link>
+                  </Button>
+                </>
+              )
+            })()}
+          </div>
+        ) : (
+          <div className="animate-fade-up space-y-8">
+            <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="eyebrow">{kindLabel}</p>
+                <h1 className="mt-2 font-mono text-4xl font-medium tabular tracking-[0.06em] sm:text-5xl" aria-label={`Code ${data.code.split("").join(" ")}`}>
+                  {formatCode(data.code)}
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground">Shared {dateFmt.format(data.createdAt)}</p>
               </div>
-            ) : error ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-20"
-              >
-                <Card className="border-border/40 bg-card/80 backdrop-blur-xl max-w-md mx-auto p-10">
-                  <div className="h-16 w-16 rounded-2xl bg-red-50 dark:bg-red-950/30 flex items-center justify-center mx-auto mb-6">
-                    <AlertCircle className="h-8 w-8 text-red-500" />
-                  </div>
-                  <h2 className="text-2xl font-black mb-2">Access Void</h2>
-                  <p className="text-muted-foreground font-medium mb-8">{error}</p>
-                  <Link href="/">
-                    <Button className="h-12 px-8 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-violet-600">
-                      Go Home
-                    </Button>
-                  </Link>
-                </Card>
-              </motion.div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="space-y-10"
-              >
-                <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                  <div>
-                    <motion.h1
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 }}
-                      className="text-7xl font-black tracking-tighter mb-4 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text"
-                    >
-                      #{code}
-                    </motion.h1>
-                    <div className="flex gap-3 flex-wrap">
-                      <Badge variant="secondary" className="px-3 py-1 font-semibold border-border/40">
-                        Shared on {new Date(pasteData!.createdAt).toLocaleDateString()}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 text-white p-5 rounded-2xl flex items-center gap-4 relative overflow-hidden group shadow-xl shadow-black/10">
-                    <div className="absolute right-0 top-0 h-full w-24 bg-blue-500/15 blur-[40px] transition-opacity opacity-50 group-hover:opacity-100" />
-                    <div className="h-10 w-10 rounded-xl bg-white/[0.08] flex items-center justify-center text-blue-400">
-                      <Clock className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Auto-Expiring</p>
-                      <p className="text-sm font-bold capitalize">{pasteData!.timeRemaining}</p>
-                    </div>
-                  </div>
-                </header>
+              <ExpiryMeter createdAt={data.createdAt} expiresAt={data.expiresAt} className="sm:w-56" />
+            </header>
 
-                <Card className="border-border/40 bg-card/80 backdrop-blur-xl shadow-lg">
-                  <CardContent className="p-8">
-                    {renderContent()}
-                  </CardContent>
-                </Card>
-              </motion.div>
+            {isFiles ? (
+              <section aria-label="Shared files" className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-sm text-muted-foreground tabular">
+                    {data.files.length} {data.files.length === 1 ? "file" : "files"} · {formatFileSize(totalSize)}
+                  </p>
+                  {data.files.length > 1 && (
+                    <Button variant="outline" size="sm" onClick={() => data.files.forEach((f, i) => setTimeout(() => downloadFile(f), i * 450))}>
+                      <Download /> Download all
+                    </Button>
+                  )}
+                </div>
+                <ul className="grid items-start gap-4 sm:grid-cols-2">
+                  {data.files.map((file, i) => (
+                    <li key={i} className="surface flex flex-col overflow-hidden sm:[&:only-child]:col-span-2">
+                      {file.preview === "image" ? (
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${file.name} full size`} className="block bg-muted">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={file.url} alt={file.name} loading="lazy" className="max-h-[28rem] w-full object-contain" />
+                        </a>
+                      ) : file.preview === "video" ? (
+                        <video src={file.url} controls preload="metadata" className="aspect-video w-full bg-black" />
+                      ) : file.preview === "audio" ? (
+                        <div className="bg-muted/50 p-4">
+                          <audio src={file.url} controls preload="metadata" className="w-full" />
+                        </div>
+                      ) : (
+                        <div className="flex h-28 items-center justify-center bg-muted/50">
+                          <FileIcon name={file.name} type={file.type} className="h-14 w-14 rounded-2xl bg-card shadow-sm ring-1 ring-border [&_svg]:h-6 [&_svg]:w-6" />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3 p-3.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium" title={file.name}>{file.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{formatFileSize(file.size)} · {file.type || "file"}</p>
+                        </div>
+                        <Button variant="outline" size="icon" onClick={() => downloadFile(file)} aria-label={`Download ${file.name}`}>
+                          <Download />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : (
+              <section aria-label="Shared text" className="surface overflow-hidden">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+                  <p className="text-sm text-muted-foreground tabular">
+                    {data.isCode ? "Code" : "Text"} · {formatBytes(utf8Length(isEditing ? editContent : data.text))} · {lineCount} {lineCount === 1 ? "line" : "lines"}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {isEditing ? (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setEditContent(data.text) }}>
+                          <X /> Cancel
+                        </Button>
+                        <Button size="sm" onClick={saveEdit} disabled={isSaving || !editContent.trim()}>
+                          <Save /> {isSaving ? "Saving…" : "Save"}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => setWrap(w => !w)} aria-pressed={wrap}>
+                          <WrapText /> <span className="hidden sm:inline">Wrap</span>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={saveText}>
+                          <Download /> <span className="hidden sm:inline">Save .txt</span>
+                        </Button>
+                        {data.allowEditing && (
+                          <Button variant="outline" size="sm" onClick={() => { setEditContent(data.text); setIsEditing(true) }}>
+                            <Pencil /> Edit
+                          </Button>
+                        )}
+                        <CopyButton value={data.text} label="Copy" size="sm" successMessage="Text copied" />
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {isEditing ? (
+                  <Textarea
+                    value={editContent}
+                    onChange={e => setEditContent(e.target.value)}
+                    aria-label="Edit text"
+                    spellCheck={false}
+                    className="min-h-[420px] rounded-none border-0 font-mono text-[13.5px] leading-relaxed focus-visible:ring-inset"
+                  />
+                ) : (
+                  <pre
+                    tabIndex={0}
+                    aria-label="Shared content"
+                    className={cn(
+                      "max-h-[70vh] min-h-[10rem] overflow-auto p-4 font-mono text-[13.5px] leading-relaxed sm:p-5",
+                      wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre",
+                    )}
+                  >
+                    {data.text}
+                  </pre>
+                )}
+              </section>
+            )}
+
+            {data.allowEditing && !isFiles && (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Link2 className="h-4 w-4" aria-hidden /> Anyone with this link can edit this text.
+              </p>
             )}
           </div>
-        </main>
-        <Footer />
-      </div>
-    </TooltipProvider>
+        )}
+      </main>
+
+      <SiteFooter />
+    </div>
   )
 }

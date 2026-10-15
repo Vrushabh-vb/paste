@@ -2,50 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  PasteHere design tokens.
+  Light  = "Ivory & Ink":        warm paper, near-black ink, bronze accent.
+  Dark   = "Obsidian & Champagne": deep neutral, warm off-white text, champagne accent.
+  One metallic accent (--gold) is used sparingly: focus, codes, progress, the primary button in dark mode.
+  All body text pairs meet WCAG AA contrast.
+*/
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 221 83% 53%;
-    --radius: 1rem;
+    --background: 40 30% 96%;
+    --foreground: 224 22% 10%;
+    --card: 40 40% 99%;
+    --card-foreground: 224 22% 10%;
+    --popover: 40 40% 99%;
+    --popover-foreground: 224 22% 10%;
+    --primary: 224 22% 10%;
+    --primary-foreground: 40 30% 96%;
+    --secondary: 40 22% 92%;
+    --secondary-foreground: 224 22% 10%;
+    --muted: 40 22% 93%;
+    --muted-foreground: 224 8% 38%;
+    --accent: 40 24% 91%;
+    --accent-foreground: 224 22% 10%;
+    --destructive: 0 62% 44%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 16% 85%;
+    --input: 40 16% 82%;
+    --ring: 36 78% 38%;
+    --gold: 36 78% 32%;
+    --gold-soft: 38 70% 52%;
+    --success: 152 58% 28%;
+    --radius: 0.875rem;
+    --aura-1: 38 92% 68% / 0.34;
+    --aura-2: 224 80% 72% / 0.16;
+    --aura-3: 24 85% 74% / 0.20;
+    color-scheme: light;
   }
 
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 19% 27%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 19% 27%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 19% 27%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 19% 27%;
-    --input: 217 19% 27%;
-    --ring: 224 76% 48%;
+    --background: 225 15% 6%;
+    --foreground: 40 22% 93%;
+    --card: 225 14% 9%;
+    --card-foreground: 40 22% 93%;
+    --popover: 225 14% 9%;
+    --popover-foreground: 40 22% 93%;
+    --primary: 40 64% 70%;
+    --primary-foreground: 225 15% 7%;
+    --secondary: 225 12% 14%;
+    --secondary-foreground: 40 22% 93%;
+    --muted: 225 12% 13%;
+    --muted-foreground: 40 8% 64%;
+    --accent: 225 12% 16%;
+    --accent-foreground: 40 22% 93%;
+    --destructive: 0 70% 58%;
+    --destructive-foreground: 225 15% 7%;
+    --border: 225 11% 18%;
+    --input: 225 11% 22%;
+    --ring: 40 64% 70%;
+    --gold: 40 64% 70%;
+    --gold-soft: 40 64% 70%;
+    --success: 152 52% 55%;
+    --aura-1: 40 80% 60% / 0.13;
+    --aura-2: 224 75% 58% / 0.10;
+    --aura-3: 30 75% 52% / 0.07;
+    color-scheme: dark;
   }
 }
 
@@ -54,14 +75,172 @@
     @apply border-border;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings: "ss01" 1, "cv11" 1;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: hsl(var(--gold-soft) / 0.35);
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Thin, quiet scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}
+
+@layer components {
+  /*
+    Animated page background (see components/background-fx.tsx).
+    Only `transform` is animated, so it runs on the GPU compositor and costs the main thread nothing.
+  */
+  .fx-blob {
+    position: absolute;
+    border-radius: 9999px;
+    will-change: transform;
+  }
+  .fx-blob-1 {
+    width: 72vmax;
+    height: 72vmax;
+    left: -22vmax;
+    top: -40vmax;
+    background: radial-gradient(closest-side, hsl(var(--aura-1)), transparent);
+    animation: fx-drift-1 38s ease-in-out infinite alternate;
+  }
+  .fx-blob-2 {
+    width: 64vmax;
+    height: 64vmax;
+    right: -28vmax;
+    top: 2vmax;
+    background: radial-gradient(closest-side, hsl(var(--aura-2)), transparent);
+    animation: fx-drift-2 46s ease-in-out infinite alternate;
+  }
+  .fx-blob-3 {
+    width: 58vmax;
+    height: 58vmax;
+    left: 12vmax;
+    bottom: -38vmax;
+    background: radial-gradient(closest-side, hsl(var(--aura-3)), transparent);
+    animation: fx-drift-3 52s ease-in-out infinite alternate;
+  }
+  @keyframes fx-drift-1 {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to { transform: translate3d(16vmax, 10vmax, 0) scale(1.18); }
+  }
+  @keyframes fx-drift-2 {
+    from { transform: translate3d(0, 0, 0) scale(1.1); }
+    to { transform: translate3d(-14vmax, 14vmax, 0) scale(0.92); }
+  }
+  @keyframes fx-drift-3 {
+    from { transform: translate3d(0, 0, 0) scale(0.95); }
+    to { transform: translate3d(18vmax, -10vmax, 0) scale(1.15); }
+  }
+
+  /* Faint dot grid that fades out towards the bottom and creeps down one cell every minute (seamless loop). */
+  .fx-grid-mask {
+    position: absolute;
+    inset: 0;
+    -webkit-mask-image: radial-gradient(ellipse 85% 65% at 50% 0%, #000 0%, transparent 78%);
+    mask-image: radial-gradient(ellipse 85% 65% at 50% 0%, #000 0%, transparent 78%);
+  }
+  .fx-grid {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -28px;
+    bottom: 0;
+    background-image: radial-gradient(hsl(var(--foreground) / 0.16) 1px, transparent 1.3px);
+    background-size: 28px 28px;
+    will-change: transform;
+    animation: fx-grid-creep 60s linear infinite;
+  }
+  @keyframes fx-grid-creep {
+    to { transform: translate3d(0, 28px, 0); }
+  }
+
+  /* Soft light that eases after the cursor (positioned by components/spotlight.tsx). */
+  .fx-spotlight {
+    position: absolute;
+    left: 0;
+    top: 0;
+    border-radius: 9999px;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    will-change: transform, opacity;
+    background: radial-gradient(closest-side, hsl(var(--gold-soft) / 0.16), transparent);
+  }
+  .dark .fx-spotlight {
+    background: radial-gradient(closest-side, hsl(var(--gold-soft) / 0.10), transparent);
+  }
+
+  /* Film grain: a tiny noise tile, drawn once. It stops the gradients looking flat or banded. */
+  .fx-grain {
+    position: absolute;
+    inset: 0;
+    opacity: 0.05;
+    background-size: 160px 160px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .dark .fx-grain {
+    opacity: 0.07;
+    filter: invert(1);
+  }
+
+  /* Raised surface used for cards */
+  .surface {
+    @apply rounded-2xl border border-border bg-card text-card-foreground;
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.6) inset,
+      0 1px 2px hsl(224 30% 10% / 0.04),
+      0 12px 32px -12px hsl(224 30% 10% / 0.10);
+  }
+  .dark .surface {
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.04) inset,
+      0 16px 40px -16px hsl(0 0% 0% / 0.6);
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }
 
 @layer utilities {
-  .glass {
-    @apply bg-white/70 backdrop-blur-md border border-white/20 dark:bg-slate-900/70 dark:border-slate-800/20;
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The background keeps its glows but holds perfectly still, and the cursor light is removed. */
+  .fx-blob,
+  .fx-grid {
+    animation: none !important;
+  }
+  .fx-spotlight {
+    display: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
